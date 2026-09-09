@@ -327,7 +327,7 @@ measures depend strongly on the amount of surrounding habitat. Accordingly,
 `bridge_strength_max` and `bridge_strength_mean` are retained as useful raw
 diagnostics but are not accepted as an independent scored component input.
 
-## Configuration-normalized Ecological Network Context experiment (Step 11)
+## Final Ecological Network Context component (Step 12)
 
 Step 11 makes one contained attempt to separate immediate habitat amount from
 its opposing-side arrangement. It uses exactly the same six first-ring
@@ -375,13 +375,51 @@ boundary sensitivity. Six individual neighbor-fraction columns are not
 persisted because the aggregate diagnostics and provenance provide the
 downstream audit information needed here.
 
-The Step 11 output remains a **RAW candidate-indicator experiment**. No
-network indicator is selected, percentile-ranked, converted to a 0–100 score,
-weighted, or combined with Habitat Context. These metrics are structural
-landscape-configuration proxies. They are not species connectivity, corridor
-probability, movement probability, or functional connectivity. Configuration
-is defined by the imposed three-axis geometry of the 500 m hex grid, so it is
-not a general orientation-free landscape-network model.
+The Step 10 absolute bridge metrics were too redundant with Habitat Context for
+the final score. The configuration normalization substantially reduces that
+redundancy while retaining a direct structural interpretation. The
+`dominant_opposing_pair_share` diagnostic is rejected because high values were
+too easily produced by trivial low-habitat opposing pairs and disproportionately
+rewarded concentration into one axis. Both rejected bridge summaries and this
+dominant-pair diagnostic remain in the raw indicator artifact for analytical
+provenance; none contributes to the component score.
+
+The finalized MVP input is solely:
+
+```text
+opposing_balance_ratio
+```
+
+It is scored by direct bounded scaling:
+
+```text
+ecological_network_score = 100 * opposing_balance_ratio
+```
+
+No percentile ranking is used. Habitat Context raw values measure habitat
+amount and do not have a natural decision-support score scale, so empirical
+percentile ranking is appropriate there. Ecological Network Context is already
+a normalized structural ratio with fixed bounds 0 and 1 and a direct
+interpretation between them. Multiplication by 100 preserves that meaning;
+percentile ranking would instead express population-relative standing.
+Components need not share a transformation merely for superficial consistency.
+
+Under this specific proxy, a score of 80 means approximately that 80% of the
+immediate habitat amount around the candidate is matched by habitat on the
+opposite side of its corresponding hex-grid axes. It does not mean 80%
+ecological connectivity, corridor quality, movement probability, habitat
+quality, or restoration suitability. This remains a transparent structural
+landscape-configuration proxy, not a validated ecological-connectivity metric.
+
+Network Context measures configuration while Habitat Context separately
+captures surrounding habitat amount. No minimum habitat-amount support
+threshold, multiplier, penalty, or nonlinear adjustment is imposed; high
+Network Context with low Habitat Context is retained as an informative
+diagnostic rather than corrected. The metric is imposed by the 500 m hex-grid
+geometry and is structural rather than functional or species-specific. Missing
+neighbors at the county edge are retained as an MVP limitation and are not
+imputed or used to exclude candidates. The component is **IMPLEMENTED FOR
+MVP**.
 
 ## Planned analytical components
 

@@ -12,9 +12,9 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 11 audits configuration-normalized raw Ecological Network Context
-indicators for the deterministic candidate population. No final network input,
-other prioritization components, or overall score is selected.
+Ecological Network Context is implemented for the MVP using the finalized
+configuration-normalized input. The remaining prioritization components and
+overall score remain deferred.
 
 ## Intended architecture
 
@@ -160,3 +160,18 @@ writes unselected indicators and diagnostics to
 `data/processed/indicators/ecological_network.csv`, with provenance in the
 corresponding `.provenance.json` file. No network score is selected or
 normalized in this step.
+
+## Generate the Ecological Network Context component score
+
+With the raw Ecological Network Context, candidate, and Habitat Context
+artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.ecological_network_score
+```
+
+This selects `opposing_balance_ratio` and directly scales it as
+`ecological_network_score = 100 * opposing_balance_ratio`. It writes the
+narrow component table and its audit/provenance manifest under
+`data/processed/components/`. The other raw network indicators remain
+available as diagnostics and do not contribute to the score.
