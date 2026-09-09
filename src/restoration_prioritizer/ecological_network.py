@@ -1,8 +1,8 @@
-"""Calculate raw Ecological Network Context bridging indicators.
+"""Calculate raw Ecological Network Context configuration indicators.
 
 This module measures the arrangement of habitat-context composition in the six
-immediate hex neighbors of each eligible candidate.  It intentionally stops at
-two raw opposing-axis indicators and diagnostics; it does not create habitat
+immediate hex neighbors of each eligible candidate. It intentionally stops at
+raw opposing-axis indicators and diagnostics; it does not create habitat
 patches, normalize, score, or combine indicators.
 """
 
@@ -61,12 +61,17 @@ AXIS_STRENGTH_COLUMNS = (
     "bridge_axis_b_strength",
     "bridge_axis_c_strength",
 )
-NETWORK_INDICATORS = ("bridge_strength_max", "bridge_strength_mean")
+ABSOLUTE_NETWORK_INDICATORS = ("bridge_strength_max", "bridge_strength_mean")
+CONFIGURATION_INDICATORS = ("opposing_balance_ratio", "dominant_opposing_pair_share")
+NETWORK_INDICATORS = (*ABSOLUTE_NETWORK_INDICATORS, *CONFIGURATION_INDICATORS)
 OUTPUT_COLUMNS = (
     "hex_id",
     *AXIS_STRENGTH_COLUMNS,
     "bridge_strength_max",
     "bridge_strength_mean",
+    "neighbor_habitat_mean",
+    "opposing_balance_ratio",
+    "dominant_opposing_pair_share",
     "strongest_axis",
     "strongest_axis_tie_count",
     "adjacent_cells_missing",
@@ -221,19 +226,33 @@ def validate_grid_inputs(
 
 def _axis_strengths(
     coordinate: tuple[int, int], lookup: dict[tuple[int, int], float]
-) -> tuple[dict[str, float], int]:
-    strengths: dict[str, float] = {}
+) -> tuple[dict[str, float], dict[tuple[int, int], float], int]:
+    neighbor_values: dict[tuple[int, int], float] = {}
     missing = 0
+    for offset in FIRST_RING_OFFSETS:
+        value = lookup.get((coordinate[0] + offset[0], coordinate[1] + offset[1]))
+        if value is None:
+            missing += 1
+            value = 0.0
+        neighbor_values[offset] = value
+    strengths: dict[str, float] = {}
     for axis, (side_1, side_2) in OPPOSITE_AXIS_PAIRS.items():
-        values = []
-        for delta_col, delta_row in (side_1, side_2):
-            value = lookup.get((coordinate[0] + delta_col, coordinate[1] + delta_row))
-            if value is None:
-                missing += 1
-                value = 0.0
-            values.append(value)
-        strengths[axis] = float(min(values))
-    return strengths, missing
+        strengths[axis] = float(min(neighbor_values[side_1], neighbor_values[side_2]))
+    return strengths, neighbor_values, missing
+
+
+def _configuration_metrics(
+    strengths: dict[str, float], neighbor_values: dict[tuple[int, int], float]
+) -> tuple[float, float, float]:
+    """Return total neighbor habitat, opposing balance, and dominant-pair share."""
+
+    total_neighbor_habitat = float(sum(neighbor_values.values()))
+    if total_neighbor_habitat == 0.0:
+        return total_neighbor_habitat, 0.0, 0.0
+    matched_opposing_habitat = float(sum(strengths.values()))
+    opposing_balance_ratio = 2.0 * matched_opposing_habitat / total_neighbor_habitat
+    dominant_opposing_pair_share = 2.0 * max(strengths.values()) / total_neighbor_habitat
+    return total_neighbor_habitat, opposing_balance_ratio, dominant_opposing_pair_share
 
 
 def calculate_indicators(
@@ -241,7 +260,7 @@ def calculate_indicators(
     analysis_units: gpd.GeoDataFrame,
     edge_flags: Sequence[bool] | None = None,
 ) -> pd.DataFrame:
-    """Calculate raw opposing-axis bridge indicators for each candidate."""
+    """Calculate raw opposing-axis and configuration indicators for each candidate."""
 
     validation = validate_grid_inputs(analysis_units, candidate_units)
     del validation
@@ -254,7 +273,10 @@ def calculate_indicators(
     records: list[dict[str, Any]] = []
     for row in candidate_units.itertuples(index=False):
         coordinate = (int(row.grid_col), int(row.grid_row))
-        strengths, missing = _axis_strengths(coordinate, lookup)
+        strengths, neighbor_values, missing = _axis_strengths(coordinate, lookup)
+        total_neighbor_habitat, opposing_balance_ratio, dominant_pair_share = (
+            _configuration_metrics(strengths, neighbor_values)
+        )
         values = np.array([strengths[axis] for axis in ("axis_a", "axis_b", "axis_c")])
         maximum = float(np.max(values))
         ties = np.isclose(values, maximum, rtol=0.0, atol=1e-12)
@@ -267,6 +289,9 @@ def calculate_indicators(
                 "bridge_axis_c_strength": strengths["axis_c"],
                 "bridge_strength_max": maximum,
                 "bridge_strength_mean": float(np.mean(values)),
+                "neighbor_habitat_mean": total_neighbor_habitat / 6.0,
+                "opposing_balance_ratio": opposing_balance_ratio,
+                "dominant_opposing_pair_share": dominant_pair_share,
                 "strongest_axis": strongest_axis,
                 "strongest_axis_tie_count": int(ties.sum()),
                 "adjacent_cells_missing": int(missing),
@@ -364,7 +389,7 @@ def _normalise_boundary_flags(values: pd.Series) -> pd.Series:
 def _validate_indicator_values(indicators: pd.DataFrame) -> None:
     _require_columns(indicators, OUTPUT_COLUMNS, "Network indicators")
     _normalise_ids(indicators, "Network indicators")
-    numeric_columns = (*AXIS_STRENGTH_COLUMNS, *NETWORK_INDICATORS)
+    numeric_columns = (*AXIS_STRENGTH_COLUMNS, "neighbor_habitat_mean", *NETWORK_INDICATORS)
     for field in numeric_columns:
         _validate_fraction(indicators[field], field)
     if (indicators["strongest_axis_tie_count"] < 1).any() or (
@@ -375,6 +400,12 @@ def _validate_indicator_values(indicators: pd.DataFrame) -> None:
         indicators["adjacent_cells_missing"] > 6
     ).any():
         raise EcologicalNetworkError("adjacent_cells_missing must lie in [0, 6]")
+    if (
+        indicators["dominant_opposing_pair_share"] > indicators["opposing_balance_ratio"] + 1e-12
+    ).any():
+        raise EcologicalNetworkError(
+            "dominant_opposing_pair_share must not exceed opposing_balance_ratio"
+        )
     _normalise_boundary_flags(indicators[BOUNDARY_FLAG])
 
 
@@ -603,9 +634,158 @@ def _bridge_split(indicators: pd.DataFrame, mask: pd.Series, label: str) -> dict
         "label": label,
         "candidate_count": int(len(subset)),
         "missing_neighbor_distribution": _count_distribution(subset["adjacent_cells_missing"], 6),
-        "bridge_strength_max": _distribution_with_bins(subset["bridge_strength_max"]),
-        "bridge_strength_mean": _distribution_with_bins(subset["bridge_strength_mean"]),
+        "indicator_distributions": {
+            indicator: _distribution_with_bins(subset[indicator])
+            for indicator in NETWORK_INDICATORS
+        },
     }
+
+
+def _support_summary(values: pd.Series) -> dict[str, float | None]:
+    summary = _quantile_summary(values)
+    return {key: summary[key] for key in ("min", "p10", "median", "p90")}
+
+
+def _top_tail_support(joined: pd.DataFrame) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for indicator in CONFIGURATION_INDICATORS:
+        ordered = joined.sort_values(
+            [indicator, "hex_id"], ascending=[False, True], kind="mergesort"
+        )
+        indicator_result: dict[str, Any] = {}
+        for fraction, label in (
+            (0.10, "top_10_percent"),
+            (0.05, "top_5_percent"),
+            (0.01, "top_1_percent"),
+        ):
+            count = max(1, math.ceil(len(ordered) * fraction))
+            selected = ordered.head(count)
+            indicator_result[label] = {
+                "candidate_count": int(count),
+                "neighbor_habitat_mean": _support_summary(selected["neighbor_habitat_mean"]),
+                "neighbor_habitat_mean_below": {
+                    "0.05": int((selected["neighbor_habitat_mean"] < 0.05).sum()),
+                    "0.10": int((selected["neighbor_habitat_mean"] < 0.10).sum()),
+                    "0.20": int((selected["neighbor_habitat_mean"] < 0.20).sum()),
+                },
+            }
+        result[indicator] = indicator_result
+    return result
+
+
+def _habitat_context_score_bands(joined: pd.DataFrame) -> dict[str, Any]:
+    bands = (
+        ("0–25", joined["habitat_context_score"].between(0, 25, inclusive="both")),
+        (
+            " >25–50",
+            (joined["habitat_context_score"] > 25) & (joined["habitat_context_score"] <= 50),
+        ),
+        (
+            " >50–75",
+            (joined["habitat_context_score"] > 50) & (joined["habitat_context_score"] <= 75),
+        ),
+        (
+            " >75–100",
+            (joined["habitat_context_score"] > 75) & (joined["habitat_context_score"] <= 100),
+        ),
+    )
+    result: dict[str, Any] = {}
+    for label, mask in bands:
+        subset = joined.loc[mask]
+        result[label.strip()] = {
+            "candidate_count": int(len(subset)),
+            "indicator_distributions": {
+                indicator: _distribution_with_bins(subset[indicator])
+                for indicator in CONFIGURATION_INDICATORS
+            },
+        }
+    return result
+
+
+def _conditional_habitat_context_correlations(joined: pd.DataFrame) -> dict[str, Any]:
+    ordered = joined.sort_values(["habitat_context_score", "hex_id"], kind="mergesort")
+    rank_percent = ordered["habitat_context_score"].rank(method="first", pct=True)
+    quartiles = (
+        ("q1_lowest", rank_percent <= 0.25),
+        ("q2", (rank_percent > 0.25) & (rank_percent <= 0.50)),
+        ("q3", (rank_percent > 0.50) & (rank_percent <= 0.75)),
+        ("q4_highest", rank_percent > 0.75),
+    )
+    result: dict[str, Any] = {}
+    for label, mask in quartiles:
+        subset = ordered.loc[mask]
+        result[label] = {
+            "candidate_count": int(len(subset)),
+            "habitat_context_score_range": {
+                "min": float(subset["habitat_context_score"].min()) if len(subset) else None,
+                "max": float(subset["habitat_context_score"].max()) if len(subset) else None,
+            },
+            "correlations": {
+                indicator: {
+                    "habitat_context_local_fraction": _correlation(
+                        subset[indicator], subset["habitat_context_local_fraction"]
+                    ),
+                    "habitat_context_score": _correlation(
+                        subset[indicator], subset["habitat_context_score"]
+                    ),
+                }
+                for indicator in CONFIGURATION_INDICATORS
+            },
+        }
+    return result
+
+
+def _json_safe_records(frame: pd.DataFrame, fields: Sequence[str]) -> list[dict[str, Any]]:
+    records = frame[list(fields)].to_dict(orient="records")
+    for record in records:
+        for field, value in record.items():
+            if isinstance(value, np.generic):
+                record[field] = value.item()
+            elif field == BOUNDARY_FLAG:
+                record[field] = bool(value)
+    return records
+
+
+def _contrast_examples(
+    joined: pd.DataFrame, indicator: str, maximum_score_difference: float = 2.0
+) -> list[dict[str, Any]]:
+    """Find high-contrast pairs with nearly equal Habitat Context scores."""
+
+    ordered = joined.sort_values(["habitat_context_score", "hex_id"], kind="mergesort").reset_index(
+        drop=True
+    )
+    scores = ordered["habitat_context_score"].to_numpy(dtype=float)
+    values = ordered[indicator].to_numpy(dtype=float)
+    candidate_pairs: dict[tuple[str, str], dict[str, Any]] = {}
+    for left in range(len(ordered) - 1):
+        right = int(np.searchsorted(scores, scores[left] + maximum_score_difference, side="right"))
+        if right <= left + 1:
+            continue
+        window = values[left + 1 : right]
+        for relative_index in (int(np.argmax(window)), int(np.argmin(window))):
+            other = left + 1 + relative_index
+            if values[other] == values[left]:
+                continue
+            pair_ids = tuple(
+                sorted((str(ordered.at[left, "hex_id"]), str(ordered.at[other, "hex_id"])))
+            )
+            difference = abs(float(values[other] - values[left]))
+            existing = candidate_pairs.get(pair_ids)
+            if existing is None or difference > existing["absolute_indicator_difference"]:
+                candidate_pairs[pair_ids] = {
+                    "hex_id_1": str(ordered.at[left, "hex_id"]),
+                    "hex_id_2": str(ordered.at[other, "hex_id"]),
+                    "habitat_context_score_1": float(ordered.at[left, "habitat_context_score"]),
+                    "habitat_context_score_2": float(ordered.at[other, "habitat_context_score"]),
+                    "habitat_context_score_difference": float(abs(scores[other] - scores[left])),
+                    f"{indicator}_1": float(values[left]),
+                    f"{indicator}_2": float(values[other]),
+                    "absolute_indicator_difference": difference,
+                }
+    return sorted(
+        candidate_pairs.values(),
+        key=lambda record: (-record["absolute_indicator_difference"], record["hex_id_1"]),
+    )[:5]
 
 
 def _audit(
@@ -625,6 +805,18 @@ def _audit(
         )
     correlations = {
         "max_vs_mean": _correlation(joined["bridge_strength_max"], joined["bridge_strength_mean"]),
+        "configuration_metrics": _correlation(
+            joined["opposing_balance_ratio"], joined["dominant_opposing_pair_share"]
+        ),
+        "configuration_vs_absolute": {
+            configuration_indicator: {
+                absolute_indicator: _correlation(
+                    joined[configuration_indicator], joined[absolute_indicator]
+                )
+                for absolute_indicator in ABSOLUTE_NETWORK_INDICATORS
+            }
+            for configuration_indicator in CONFIGURATION_INDICATORS
+        },
         "against_habitat_context": {
             network_indicator: {
                 "habitat_context_local_fraction": _correlation(
@@ -635,6 +827,9 @@ def _audit(
                 ),
                 "habitat_context_adjacent_fraction": _correlation(
                     joined[network_indicator], joined["habitat_context_adjacent_fraction"]
+                ),
+                "neighbor_habitat_mean": _correlation(
+                    joined[network_indicator], joined["neighbor_habitat_mean"]
                 ),
             }
             for network_indicator in NETWORK_INDICATORS
@@ -661,24 +856,72 @@ def _audit(
     balance["percent_axis_b"] = float(100.0 * balance["axis_b"] / len(indicators))
     balance["percent_axis_c"] = float(100.0 * balance["axis_c"] / len(indicators))
     balance["percent_tied_between_2_or_more_axes"] = float(100.0 * tie_count / len(indicators))
-    top_examples = joined.sort_values(
-        ["bridge_strength_max", "hex_id"], ascending=[False, True], kind="mergesort"
-    ).head(10)
-    top_fields = [
+    axis_values = indicators[list(AXIS_STRENGTH_COLUMNS)].to_numpy(dtype=float)
+    zero_total = joined["neighbor_habitat_mean"] == 0
+    mathematical_validation = {
+        "total_neighbor_habitat_nonnegative": bool((joined["neighbor_habitat_mean"] >= 0).all()),
+        "neighbor_habitat_mean_in_0_1": bool(
+            joined["neighbor_habitat_mean"].between(0, 1, inclusive="both").all()
+        ),
+        "opposing_balance_ratio_in_0_1": bool(
+            joined["opposing_balance_ratio"].between(0, 1, inclusive="both").all()
+        ),
+        "dominant_opposing_pair_share_in_0_1": bool(
+            joined["dominant_opposing_pair_share"].between(0, 1, inclusive="both").all()
+        ),
+        "dominant_pair_share_le_balance_ratio": bool(
+            (
+                joined["dominant_opposing_pair_share"] <= joined["opposing_balance_ratio"] + 1e-12
+            ).all()
+        ),
+        "zero_total_habitat_ratios_exactly_zero": bool(
+            (joined.loc[zero_total, list(CONFIGURATION_INDICATORS)] == 0).all(axis=None)
+        ),
+        "no_non_finite_values": bool(
+            np.isfinite(
+                joined[["neighbor_habitat_mean", *CONFIGURATION_INDICATORS]].to_numpy(dtype=float)
+            ).all()
+        ),
+        "bridge_strength_max_matches_axis_max": bool(
+            np.allclose(
+                indicators["bridge_strength_max"], axis_values.max(axis=1), rtol=0, atol=1e-12
+            )
+        ),
+        "bridge_strength_mean_matches_axis_mean": bool(
+            np.allclose(
+                indicators["bridge_strength_mean"], axis_values.mean(axis=1), rtol=0, atol=1e-12
+            )
+        ),
+        "one_row_per_candidate": bool(
+            len(indicators) == len(joined) and joined["hex_id"].is_unique
+        ),
+    }
+    example_fields = [
         "hex_id",
-        *AXIS_STRENGTH_COLUMNS,
-        "strongest_axis",
+        "neighbor_habitat_mean",
+        "bridge_strength_max",
+        "habitat_context_score",
         "candidate_fraction_of_terrestrial",
         "habitat_context_fraction_of_terrestrial",
-        "habitat_context_local_fraction",
         BOUNDARY_FLAG,
     ]
-    top_records = top_examples[top_fields].to_dict(orient="records")
-    for record in top_records:
-        record[BOUNDARY_FLAG] = bool(record[BOUNDARY_FLAG])
-        for field in top_fields:
-            if isinstance(record.get(field), np.generic):
-                record[field] = record[field].item()
+    top_dominant = joined.sort_values(
+        ["dominant_opposing_pair_share", "hex_id"],
+        ascending=[False, True],
+        kind="mergesort",
+    ).head(10)
+    top_dominant_fields = [
+        "hex_id",
+        "dominant_opposing_pair_share",
+        *example_fields[1:3],
+        *AXIS_STRENGTH_COLUMNS,
+        "strongest_axis",
+        *example_fields[3:],
+    ]
+    top_balance = joined.sort_values(
+        ["opposing_balance_ratio", "hex_id"], ascending=[False, True], kind="mergesort"
+    ).head(10)
+    top_balance_fields = ["hex_id", "opposing_balance_ratio", *example_fields[1:]]
     return {
         "axis_strength_distributions": {
             column: _axis_distribution(indicators[column]) for column in AXIS_STRENGTH_COLUMNS
@@ -706,6 +949,11 @@ def _audit(
                 (indicators["bridge_strength_max"] >= 0.75).sum()
             ),
         },
+        "configuration_indicator_distributions": {
+            indicator: _distribution_with_bins(indicators[indicator])
+            for indicator in CONFIGURATION_INDICATORS
+        },
+        "mathematical_validation": mathematical_validation,
         "correlation_diagnostics": correlations,
         "strongest_axis_balance": balance,
         "missing_neighbor_distribution": _count_distribution(missing, 6),
@@ -722,7 +970,32 @@ def _audit(
         "boundary_edge_candidates": int(boundary.sum()),
         "boundary_edge_candidate_percent": float(100.0 * boundary.mean()),
         "top_tail_boundary_edge_counts": _top_tail_boundary_counts(indicators),
-        "top_network_examples": top_records,
+        "low_habitat_high_configuration": _top_tail_support(joined),
+        "habitat_context_score_bands": _habitat_context_score_bands(joined),
+        "conditional_habitat_context_quartiles": _conditional_habitat_context_correlations(joined),
+        "top_dominant_opposing_pair_examples": _json_safe_records(
+            top_dominant, top_dominant_fields
+        ),
+        "top_opposing_balance_examples": _json_safe_records(top_balance, top_balance_fields),
+        "contrast_examples": {
+            indicator: _contrast_examples(joined, indicator)
+            for indicator in CONFIGURATION_INDICATORS
+        },
+        "boundary_diagnostics": {
+            "boundary_candidate_count": int(boundary.sum()),
+            "top_tail_boundary_edge_counts": {
+                indicator: _top_tail_boundary_counts(indicators)[indicator]
+                for indicator in CONFIGURATION_INDICATORS
+            },
+            "boundary_distributions": {
+                indicator: _distribution_with_bins(indicators.loc[boundary, indicator])
+                for indicator in CONFIGURATION_INDICATORS
+            },
+            "non_boundary_distributions": {
+                indicator: _distribution_with_bins(indicators.loc[~boundary, indicator])
+                for indicator in CONFIGURATION_INDICATORS
+            },
+        },
         "analysis_grid_count": int(len(analysis_units)),
     }
 
@@ -816,16 +1089,33 @@ def build_ecological_network(
         },
         "missing_neighbor_treatment": (
             "A missing adjacent analysis-grid position is assigned habitat fraction 0 for this "
-            "bridging calculation. Missing positions are counted; values are not imputed across "
-            "the study/county boundary."
+            "bridging and configuration calculation. Missing positions are counted; values are "
+            "not imputed across the study/county boundary."
         ),
         "formulas": {
             "neighbor_habitat_fraction": "habitat_context_pixels / terrestrial_pixels, equivalent to habitat_context_fraction_of_terrestrial",
+            "total_neighbor_habitat": "a1 + a2 + b1 + b2 + c1 + c2, an unweighted sum of six per-cell habitat fractions",
+            "neighbor_habitat_mean": "total_neighbor_habitat / 6, diagnostic only and not a model score",
             "axis_strength": "min(neighbor_habitat_fraction_side_1, neighbor_habitat_fraction_side_2)",
             "bridge_strength_max": "max(bridge_axis_a_strength, bridge_axis_b_strength, bridge_axis_c_strength)",
             "bridge_strength_mean": "mean(bridge_axis_a_strength, bridge_axis_b_strength, bridge_axis_c_strength)",
+            "opposing_balance_ratio": "2 * (bridge_axis_a_strength + bridge_axis_b_strength + bridge_axis_c_strength) / total_neighbor_habitat when total_neighbor_habitat > 0; otherwise 0",
+            "dominant_opposing_pair_share": "2 * max(bridge_axis_a_strength, bridge_axis_b_strength, bridge_axis_c_strength) / total_neighbor_habitat when total_neighbor_habitat > 0; otherwise 0",
+            "zero_total_habitat_convention": "When total_neighbor_habitat == 0, both configuration ratios are exactly 0.",
             "strongest_axis_tie": "all axes within 1e-12 of the maximum; first stable order axis_a, axis_b, axis_c is recorded",
         },
+        "configuration_normalization_interpretation": {
+            "purpose": "Separate opposing-side arrangement from the amount of immediate surrounding habitat.",
+            "opposing_balance_ratio": "The share of total immediate habitat that has matched habitat on an opposing grid axis.",
+            "dominant_opposing_pair_share": "The share of total immediate habitat organized around the strongest single matched opposing pair.",
+            "relationship_to_absolute_strengths": "The Step 10 axis strengths remain as absolute diagnostic indicators; the Step 11 ratios normalize matched habitat by the total six-neighbor habitat amount.",
+            "low_habitat_consequence": "A small but well-balanced opposing pair can receive a high ratio; no arbitrary minimum-habitat threshold is applied, and the audit quantifies this behavior.",
+        },
+        "step_10_redundancy_finding": (
+            "The absolute bridge-strength indicators remain strongly related to Habitat Context "
+            "in this audit, so they are retained as raw diagnostics and not accepted as an "
+            "independent scored component input."
+        ),
         "candidate_population_validation": {**validation, **reconciliation},
         "audit": audit,
         "geometry_sanity": geometry_sanity,
@@ -837,6 +1127,12 @@ def build_ecological_network(
         },
         "validation": {
             "fractions_finite_and_in_range": True,
+            "total_neighbor_habitat_nonnegative": True,
+            "neighbor_habitat_mean_in_0_1": True,
+            "configuration_ratios_in_0_1": True,
+            "dominant_pair_share_le_balance_ratio": True,
+            "zero_total_habitat_ratios_exactly_zero": True,
+            "no_non_finite_configuration_values": True,
             "focal_cell_excluded": True,
             "full_analysis_grid_used_for_surrounding_cells": True,
             "candidate_eligibility_not_used_for_neighbors": True,
@@ -844,9 +1140,10 @@ def build_ecological_network(
             "no_patch_or_connected_component_network": True,
             "no_normalization_or_scoring": True,
             "no_indicator_combination": True,
+            "mathematical_validation": audit["mathematical_validation"],
         },
         "caveats": [
-            "This is a landscape-configuration proxy, not species connectivity.",
+            "These are structural landscape-configuration proxies, not species connectivity, corridor probability, movement probability, or functional connectivity.",
             "No habitat-quality weighting is applied.",
             "No patch-size threshold is applied.",
             "No resistance surface is used.",
@@ -879,8 +1176,20 @@ def main() -> None:
         f"({provenance['output']['size_bytes']:,} bytes, {len(indicators):,} rows)"
     )
     print(f"Provenance: {provenance['provenance_output']['path']}")
-    print(json.dumps(provenance["audit"], ensure_ascii=False, indent=2))
-    print(json.dumps(provenance["geometry_sanity"], ensure_ascii=False, indent=2))
+    audit = provenance["audit"]
+    for indicator in CONFIGURATION_INDICATORS:
+        summary = audit["configuration_indicator_distributions"][indicator]
+        print(
+            f"{indicator}: median={summary['median']:.6f}, "
+            f"p10={summary['p10']:.6f}, p90={summary['p90']:.6f}"
+        )
+    print(
+        "Configuration correlation: "
+        f"Pearson={audit['correlation_diagnostics']['configuration_metrics']['pearson']:.6f}, "
+        f"Spearman={audit['correlation_diagnostics']['configuration_metrics']['spearman']:.6f}"
+    )
+    print(f"Boundary candidates: {audit['boundary_edge_candidates']:,}")
+    print(f"Geometry sanity checks passed: {provenance['geometry_sanity']['all_checks_passed']}")
     print(f"Runtime: {provenance['runtime_seconds']:.2f} seconds")
 
 

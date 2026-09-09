@@ -112,6 +112,100 @@ def test_habitat_on_opposing_sides_produces_expected_bridge() -> None:
     assert result.bridge_strength_max == pytest.approx(0.7)
 
 
+def test_balanced_one_axis_pair_has_unit_configuration_ratios() -> None:
+    coordinates = [(0, 0), *FIRST_RING_OFFSETS]
+    habitat = {(-1, 0): 0.8, (1, 0): 0.8}
+    result = calculate_indicators(
+        make_units(coordinates, habitat=habitat).iloc[[0]], make_units(coordinates, habitat=habitat)
+    ).iloc[0]
+    assert result.neighbor_habitat_mean == pytest.approx(1.6 / 6)
+    assert result.opposing_balance_ratio == pytest.approx(1.0)
+    assert result.dominant_opposing_pair_share == pytest.approx(1.0)
+
+
+def test_all_six_equal_habitat_has_unit_balance_and_one_third_dominant_share() -> None:
+    coordinates = [(0, 0), *FIRST_RING_OFFSETS]
+    habitat = {offset: 0.8 for offset in FIRST_RING_OFFSETS}
+    result = calculate_indicators(
+        make_units(coordinates, habitat=habitat).iloc[[0]], make_units(coordinates, habitat=habitat)
+    ).iloc[0]
+    assert result.opposing_balance_ratio == pytest.approx(1.0)
+    assert result.dominant_opposing_pair_share == pytest.approx(1 / 3)
+
+
+def test_one_sided_habitat_has_zero_configuration_ratios() -> None:
+    coordinates = [(0, 0), *FIRST_RING_OFFSETS]
+    habitat = {(-1, 0): 0.8, (0, -1): 0.6, (-1, 1): 0.4}
+    result = calculate_indicators(
+        make_units(coordinates, habitat=habitat).iloc[[0]], make_units(coordinates, habitat=habitat)
+    ).iloc[0]
+    assert result.opposing_balance_ratio == 0
+    assert result.dominant_opposing_pair_share == 0
+
+
+def test_configuration_ratios_handle_partial_matched_habitat() -> None:
+    coordinates = [(0, 0), *FIRST_RING_OFFSETS]
+    habitat = dict(zip(FIRST_RING_OFFSETS, [0.8, 0.4, 0.6, 0.2, 0.3, 0.1], strict=True))
+    result = calculate_indicators(
+        make_units(coordinates, habitat=habitat).iloc[[0]], make_units(coordinates, habitat=habitat)
+    ).iloc[0]
+    assert result.neighbor_habitat_mean == pytest.approx(2.4 / 6)
+    assert result.opposing_balance_ratio == pytest.approx(0.5)
+    assert result.dominant_opposing_pair_share == pytest.approx(0.25)
+    assert result.dominant_opposing_pair_share <= result.opposing_balance_ratio
+
+
+def test_zero_total_habitat_has_zero_ratios_without_division_error() -> None:
+    coordinates = [(0, 0), *FIRST_RING_OFFSETS]
+    result = calculate_indicators(make_units(coordinates).iloc[[0]], make_units(coordinates)).iloc[
+        0
+    ]
+    assert result.neighbor_habitat_mean == 0
+    assert result.opposing_balance_ratio == 0
+    assert result.dominant_opposing_pair_share == 0
+
+
+def test_configuration_ratios_are_scale_invariant() -> None:
+    coordinates = [(0, 0), *FIRST_RING_OFFSETS]
+    habitat = dict(zip(FIRST_RING_OFFSETS, [0.8, 0.4, 0.6, 0.2, 0.3, 0.1], strict=True))
+    scaled_habitat = {offset: value * 0.5 for offset, value in habitat.items()}
+    original = calculate_indicators(
+        make_units(coordinates, habitat=habitat).iloc[[0]], make_units(coordinates, habitat=habitat)
+    ).iloc[0]
+    scaled = calculate_indicators(
+        make_units(coordinates, habitat=scaled_habitat).iloc[[0]],
+        make_units(coordinates, habitat=scaled_habitat),
+    ).iloc[0]
+    assert scaled.opposing_balance_ratio == pytest.approx(original.opposing_balance_ratio)
+    assert scaled.dominant_opposing_pair_share == pytest.approx(
+        original.dominant_opposing_pair_share
+    )
+
+
+def test_configuration_ratios_remain_in_zero_to_one() -> None:
+    coordinates = [(0, 0), *FIRST_RING_OFFSETS]
+    habitat = dict(zip(FIRST_RING_OFFSETS, [0.0, 1.0, 0.25, 0.75, 0.4, 0.9], strict=True))
+    result = calculate_indicators(
+        make_units(coordinates, habitat=habitat).iloc[[0]], make_units(coordinates, habitat=habitat)
+    ).iloc[0]
+    assert 0 <= result.opposing_balance_ratio <= 1
+    assert 0 <= result.dominant_opposing_pair_share <= 1
+    assert result.dominant_opposing_pair_share <= result.opposing_balance_ratio
+
+
+def test_step_10_absolute_indicators_remain_unchanged_with_step_11_fields() -> None:
+    coordinates = [(0, 0), *FIRST_RING_OFFSETS]
+    habitat = dict(zip(FIRST_RING_OFFSETS, [0.2, 0.8, 0.4, 0.4, 0.6, 0.2], strict=True))
+    result = calculate_indicators(
+        make_units(coordinates, habitat=habitat).iloc[[0]], make_units(coordinates, habitat=habitat)
+    ).iloc[0]
+    assert result.bridge_axis_a_strength == pytest.approx(0.2)
+    assert result.bridge_axis_b_strength == pytest.approx(0.4)
+    assert result.bridge_axis_c_strength == pytest.approx(0.6)
+    assert result.bridge_strength_max == pytest.approx(0.6)
+    assert result.bridge_strength_mean == pytest.approx(0.4)
+
+
 def test_adjacent_nonopposing_habitat_does_not_create_same_bridge_signal() -> None:
     coordinates = [(0, 0), *FIRST_RING_OFFSETS]
     full_grid = make_units(coordinates, habitat={(-1, 0): 0.8, (0, -1): 0.8})

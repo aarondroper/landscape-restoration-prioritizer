@@ -320,6 +320,69 @@ habitat-quality weighting, patch-size threshold, resistance surface, or
 species-specific dispersal distance. Its axis geometry is imposed by the
 500 m analysis grid, and cross-county context remains a known limitation.
 
+The Step 10 audit found that the absolute bridge-strength indicators remained
+strongly related to Habitat Context: approximately 0.87–0.90 Spearman
+correlation across the tested bridge summaries. This is expected because both
+measures depend strongly on the amount of surrounding habitat. Accordingly,
+`bridge_strength_max` and `bridge_strength_mean` are retained as useful raw
+diagnostics but are not accepted as an independent scored component input.
+
+## Configuration-normalized Ecological Network Context experiment (Step 11)
+
+Step 11 makes one contained attempt to separate immediate habitat amount from
+its opposing-side arrangement. It uses exactly the same six first-ring
+habitat fractions and missing-neighbor convention as Step 10. For each
+candidate, let `a1`, `a2`, `b1`, `b2`, `c1`, and `c2` be the habitat-context
+fractions at the three opposing axis pairs. A missing analysis-grid position
+contributes zero. The candidate's focal-cell fraction is excluded.
+
+The diagnostic total is the unweighted sum of the six per-cell fractions:
+
+```text
+total_neighbor_habitat = a1 + a2 + b1 + b2 + c1 + c2
+neighbor_habitat_mean = total_neighbor_habitat / 6
+```
+
+This total is distinct from Step 8's pixel-weighted adjacent habitat fraction.
+The existing Step 10 axis strengths remain:
+
+```text
+m_a = min(a1, a2)
+m_b = min(b1, b2)
+m_c = min(c1, c2)
+```
+
+Two raw configuration-normalized indicators are added:
+
+```text
+opposing_balance_ratio = 2 * (m_a + m_b + m_c) / total_neighbor_habitat
+dominant_opposing_pair_share = 2 * max(m_a, m_b, m_c) / total_neighbor_habitat
+```
+
+When `total_neighbor_habitat == 0`, both ratios are defined as exactly zero.
+The formulas therefore describe arrangement relative to the immediate habitat
+amount. The first asks how much immediate habitat has matching habitat on an
+opposing axis. The second asks how much is organized around one dominant
+matched opposing pair. Both have a mathematical range of 0–1, and the
+dominant-pair share cannot exceed the overall opposing-balance ratio.
+
+These pure configuration ratios can be high when the absolute surrounding
+habitat amount is small. Step 11 does not add an arbitrary minimum-habitat
+threshold; its real-data audit reports the neighborhood-habitat support in the
+top 10%, 5%, and 1% tails, distributions within Habitat Context score bands,
+within-quartile correlations, contrasts at similar Habitat Context scores, and
+boundary sensitivity. Six individual neighbor-fraction columns are not
+persisted because the aggregate diagnostics and provenance provide the
+downstream audit information needed here.
+
+The Step 11 output remains a **RAW candidate-indicator experiment**. No
+network indicator is selected, percentile-ranked, converted to a 0–100 score,
+weighted, or combined with Habitat Context. These metrics are structural
+landscape-configuration proxies. They are not species connectivity, corridor
+probability, movement probability, or functional connectivity. Configuration
+is defined by the imposed three-axis geometry of the 500 m hex grid, so it is
+not a general orientation-free landscape-network model.
+
 ## Planned analytical components
 
 Each candidate cell will retain five independently available component scores:

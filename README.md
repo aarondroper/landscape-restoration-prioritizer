@@ -12,9 +12,9 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 10 implements raw Ecological Network Context indicators for the
-deterministic candidate population. The final network input, other
-prioritization components, and overall score remain deferred.
+Step 11 audits configuration-normalized raw Ecological Network Context
+indicators for the deterministic candidate population. No final network input,
+other prioritization components, or overall score is selected.
 
 ## Intended architecture
 
@@ -155,8 +155,8 @@ python -m restoration_prioritizer.ecological_network
 ```
 
 This evaluates the three opposing first-ring hex-grid axes using the minimum
-habitat fraction on each pair of sides. It writes two raw, unselected
-bridging indicators and diagnostics to
+habitat fraction on each pair of sides, plus two raw configuration ratios. It
+writes unselected indicators and diagnostics to
 `data/processed/indicators/ecological_network.csv`, with provenance in the
 corresponding `.provenance.json` file. No network score is selected or
 normalized in this step.
