@@ -14,8 +14,10 @@ recommendation or a scientific probability model.
 
 Habitat Context, Ecological Network Context, Riparian Opportunity, and
 Protected-Area Reinforcement are implemented for the MVP using their finalized
-component definitions. Land-Restoration Feasibility, component weights,
-presets, and the overall score remain deferred.
+component definitions. Raw mapped land-restoration feasibility / land-availability
+indicators are implemented for audit; no fifth-component formula or score has
+been selected. Component weights, presets, and the overall score remain
+deferred.
 
 ## Intended architecture
 
@@ -261,3 +263,22 @@ average-rank score among non-overlap candidates. Focal, adjacent, and local
 protected-terrestrial fractions remain supporting diagnostics. The component
 artifact and component-specific provenance are written under
 `data/processed/components/`.
+
+## Generate raw mapped land-restoration feasibility indicators
+
+With the Step 6 analysis grid, Step 7 candidate population, and finalized
+component artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.land_restoration_feasibility
+```
+
+This writes the five raw primitives—candidate arable hectares, candidate arable
+fraction, focal artificial burden, adjacent artificial context, and local
+artificial context—to
+`data/processed/indicators/land_restoration_feasibility.csv`, with the audit
+manifest in the corresponding `.provenance.json` file. It reuses the Step 5
+NMD roles (`primary_candidate` = class 3 and `artificial_constraint` = classes
+51–53) and the existing Step 6/7 counts. This is a mapped land-availability /
+development-context proxy, not cadastral or socioeconomic feasibility. No raw
+indicators are combined, normalized, weighted, or scored.

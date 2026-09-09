@@ -759,3 +759,55 @@ least-cost distance, species connectivity, or travel distance. No 5 km source
 acquisition buffer is used as a score threshold. Cross-county terrestrial
 support outside the Skåne NMD raster remains unavailable, and formal protection
 does not imply ecological quality or restoration feasibility.
+
+## Mapped land-restoration feasibility / land-availability context (Step 19)
+
+The fifth planned component is currently interpreted narrowly as a **mapped
+land-restoration feasibility / land-availability context proxy**. It is not
+real implementation feasibility in the socioeconomic, cadastral, legal, or
+financial sense. The MVP has no ownership, land price, farmer or landowner
+willingness, agricultural yield, soil suitability, drainage infrastructure,
+subsidy commitment, lease tenure, detailed terrain constraint, or legal
+acquisition-cost data. Those questions remain outside this step.
+
+Step 19 audits five raw, uncombined primitives for every Step 7 eligible
+candidate. It reuses the generated Step 6 full analysis grid and Step 7
+candidate layer; it does not reread the NMD raster or ingest a new
+environmental dataset.
+
+- `candidate_land_area_ha` is `candidate_area_m2 / 10,000`. The source value is
+  the already approved Step 7 NMD arable candidate area, not a newly inferred
+  area.
+- `candidate_land_fraction` is the existing
+  `candidate_fraction_of_terrestrial`, preserved unchanged. It is the fraction
+  of the candidate hex's terrestrial NMD pixels classified as arable.
+- `artificial_focal_fraction` is focal
+  `artificial_constraint_pixels / terrestrial_pixels`.
+- `artificial_adjacent_fraction` is the sum of artificial-constraint pixels
+  divided by the sum of terrestrial pixels across the six first-ring positions,
+  excluding the focal cell.
+- `artificial_local_fraction` is the same pixel-weighted ratio across all 18
+  positions with `1 <= hex distance <= 2`, excluding the focal cell.
+
+The candidate/restorable-land proxy is the existing Step 5
+`primary_candidate` role: NMD class 3, arable land. The artificial/developed
+constraint proxy is the existing Step 5 `artificial_constraint` role: classes
+51 (building), 52 (other artificial surfaces), and 53 (transport). Peat
+extraction class 54, inland water, wetland, forest, open vegetation, and
+protected-area status are not artificial constraints for this component.
+Protected agricultural land is not automatically treated as infeasible, and
+habitat or wetland interspersion is not automatically treated as infeasible.
+
+Adjacent and local fractions aggregate factual pixel counts first. Missing or
+water-only positions contribute no terrestrial denominator; they are not
+converted into artificial=0 land. The `boundary_edge_flag` is retained as a
+diagnostic. The durable raw table contains no geometry, scores, combined
+formula, normalization, weights, presets, or overall prioritization score.
+
+Step 19 reports area-versus-fraction redundancy, focal/adjacent/local
+artificial-scale redundancy, relationships with all four finalized component
+scores, ecological tradeoff diagnostics, boundary/coastal and terrestrial-
+fraction sensitivity, and descriptive examples. It does **not** select the
+final fifth-component formula. A 500 m hex remains an analytical unit rather
+than a cadastral parcel, and 10 m NMD arable classification does not imply
+ownership, willingness, suitability, or implementability.
