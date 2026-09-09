@@ -164,6 +164,48 @@ regular hex geometry is retained rather than clipped to arable pixels. Later
 component indicators will differentiate candidate units based on surrounding
 landscape context.
 
+## Raw Habitat Context indicators (Step 8)
+
+The Habitat Context component begins with two **raw indicators** for every
+eligible candidate analysis unit. They use the Step 5 `habitat_context_proxy`
+role exactly as defined above: established forest on firm ground, established
+forest on wetland, open wetland, and open vegetated land. This is a structural
+land-cover proxy. It does not measure biodiversity, habitat quality, ecological
+condition, forest naturalness, species occurrence, legal protection, or
+restoration success probability.
+
+The candidate unit is the focal cell and is excluded from both surrounding
+calculations. The immediate indicator aggregates habitat-context and
+terrestrial NMD pixels over the six directly adjacent hex positions (hex
+distance exactly 1). The local indicator aggregates the same quantities over
+all 18 positions with `1 <= hex distance <= 2`: the six first-ring positions
+and twelve second-ring positions. The local neighborhood is the regular
+hex-grid convention, not a Euclidean circle or polygon buffer. The nominal
+center separations are approximately 500 m for the first ring and
+approximately 0.9–1.0 km for the second ring depending on direction; these are
+analytical scales, not exact ecological influence distances.
+
+For each indicator, the denominator is terrestrial NMD pixels in available
+surrounding analysis-grid cells. Sea, inland water, and no-data are not
+denominator land. An expected grid position absent from the durable analysis
+grid is omitted rather than treated as zero terrestrial habitat. The output
+also records how many terrestrial analysis-grid cells were present in each
+neighborhood and preserves missing fractions if a neighborhood has zero
+terrestrial pixels.
+
+Using integer grid neighborhoods instead of arbitrary circular buffers makes
+the calculation deterministic, aligned with the analytical tessellation, and
+computationally simple. The full `analysis_units.gpkg` grid supplies context;
+`candidate_units.gpkg` supplies only the focal population, so a noncandidate
+surrounding cell can contribute habitat context.
+
+These indicators remain **RAW**. No 0–100 normalization, component score,
+weight, or overall restoration score is defined in Step 8. The current NMD and
+analysis-unit artifacts stop at the Skåne study boundary, so context just
+across the Halland or Blekinge county boundary is invisible. Step 8 measures
+that potential study-boundary truncation with a diagnostic edge zone but does
+not exclude or alter edge candidates and does not add cross-border data.
+
 The study-area identifiers are county/län code **12** and NUTS 3 code
 **SE224**. The reproducible boundary source is SCB DeSO 2025: select
 `lanskod=12` from the anonymous WFS and dissolve the returned polygons.
@@ -217,9 +259,9 @@ decision-support opportunity within the study population; they are not
 absolute ecological value, restoration probability, or a parcel-level
 recommendation.
 
-Exact indicators and transformations remain to be validated against the source
-data before implementation. This document intentionally does not prescribe
-detailed formulas prematurely.
+Exact indicators for the remaining components and all later transformations
+remain to be validated against their source data. This document intentionally
+does not prescribe later formulas prematurely.
 
 ## Current assumptions and limitations
 

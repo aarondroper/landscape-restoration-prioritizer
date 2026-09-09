@@ -12,9 +12,9 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 7 implements the deterministic MVP candidate population from the Step 6
-factual analysis-unit grid. Ecological context indicators and scoring remain
-deferred.
+Step 8 implements raw Habitat Context indicators for the deterministic MVP
+candidate population. Normalization, component scoring, and the other
+prioritization components remain deferred.
 
 ## Intended architecture
 
@@ -116,3 +116,19 @@ layer to `data/processed/candidate_units.gpkg` and its specific audit/provenance
 summary to `data/processed/candidate_units.provenance.json`. It retains the
 complete regular hexagons and does not calculate ecological indicators or
 prioritization scores.
+
+## Generate raw Habitat Context indicators
+
+With the Step 6 and Step 7 processed artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.habitat_context
+```
+
+This uses the full terrestrial analysis grid for context and the candidate
+layer only as the focal population. It writes the ignored keyed indicator
+table to `data/processed/indicators/habitat_context.csv` and its component
+provenance/audit report to
+`data/processed/indicators/habitat_context.provenance.json`. The immediate and
+local indicators are raw terrestrial-pixel fractions; they are not normalized
+or scored.
