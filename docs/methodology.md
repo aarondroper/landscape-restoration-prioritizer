@@ -29,8 +29,9 @@ For integer grid coordinates `(col, row)`, the center is
 `h_<col>_<row>`. The same CRS, width, anchor, and raster extent therefore
 regenerate the same grid independently of boundary vertex ordering. The
 processed NMD raster supplies the factual spatial extent. Cells with no
-terrestrial NMD pixel are discarded; no minimum terrestrial percentage,
-minimum arable percentage, or minimum arable area has been selected.
+terrestrial NMD pixel are discarded from the Step 6 factual grid. Step 6 does
+not apply a candidate eligibility threshold; that separate population
+definition is specified below for Step 7.
 
 The candidate-land definition, including treatment of land cover and obvious
 constraints, is explicitly defined by the Step 5 NMD semantic contract below.
@@ -132,6 +133,36 @@ area divided by the complete hex area. Candidate and habitat-context
 fractions use terrestrial pixels as their denominator, which preserves the
 distinction between coastal/water composition and land composition. These
 fractions are descriptive land-cover measurements, not eligibility scores.
+
+## MVP candidate analysis-unit eligibility (Step 7)
+
+The **primary candidate pixel** is exactly NMD class 3 arable land
+(`Åkermark`). This is a pixel-level land-cover definition from the Step 5
+semantic contract.
+
+The **eligible candidate analysis unit** is a complete regular 500 m
+flat-to-flat hexagon from the Step 6 factual grid satisfying both inclusive
+conditions:
+
+```text
+candidate_area_m2 >= 50,000
+candidate_fraction_of_terrestrial >= 0.25
+```
+
+Equivalently, the unit contains at least **5 ha of arable land**, and arable
+land comprises at least **25% of its terrestrial NMD pixels**. This explicit,
+pragmatic MVP rule defines the population to be ranked. It is a screening-domain
+definition, not a suitability score, ecological minimum, scientifically
+optimized threshold, restoration-feasibility claim, or claim that a retained
+unit is actually restorable.
+
+The rule has no additional eligibility conditions. In particular, no
+terrestrial-coverage threshold is applied, and mixed habitat, wetland, inland
+water, sea, or artificial context does not by itself exclude a hexagon. Those
+factual composition fields are retained for later analysis. The complete
+regular hex geometry is retained rather than clipped to arable pixels. Later
+component indicators will differentiate candidate units based on surrounding
+landscape context.
 
 The study-area identifiers are county/län code **12** and NUTS 3 code
 **SE224**. The reproducible boundary source is SCB DeSO 2025: select

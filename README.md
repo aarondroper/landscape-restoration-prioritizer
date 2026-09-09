@@ -12,9 +12,9 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 6 implements the deterministic 500 m flat-to-flat EPSG:3006 analysis grid
-and factual NMD composition for each retained terrestrial unit. Candidate
-eligibility, ecological context indicators, and scoring remain deferred.
+Step 7 implements the deterministic MVP candidate population from the Step 6
+factual analysis-unit grid. Ecological context indicators and scoring remain
+deferred.
 
 ## Intended architecture
 
@@ -101,3 +101,18 @@ to `data/processed/analysis_units.provenance.json`. Complete hexagons are
 retained; only cells with zero terrestrial NMD pixels are removed. The command
 reports candidate-fraction and candidate-area threshold sensitivities as
 diagnostics only and does not select an eligibility threshold.
+
+## Generate the MVP candidate population
+
+With the Step 6 analysis-unit artifact present, run:
+
+```bash
+python -m restoration_prioritizer.candidate_units
+```
+
+This applies the fixed inclusive rule `candidate_area_m2 >= 50_000` and
+`candidate_fraction_of_terrestrial >= 0.25`, then writes the ignored candidate
+layer to `data/processed/candidate_units.gpkg` and its specific audit/provenance
+summary to `data/processed/candidate_units.provenance.json`. It retains the
+complete regular hexagons and does not calculate ecological indicators or
+prioritization scores.
