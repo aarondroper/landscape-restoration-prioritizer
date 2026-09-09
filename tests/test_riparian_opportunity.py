@@ -195,3 +195,99 @@ def test_zero_denominators_ids_and_fractions_are_stable() -> None:
     for column in fraction_columns:
         values = first[column].dropna()
         assert ((values >= 0) & (values <= 1)).all()
+
+
+def test_near_fraction_uses_max_focal_and_adjacent() -> None:
+    adjacent_coordinate = RING_1_OFFSETS[0]
+    grid = grid_frame(
+        [
+            {"grid_col": 0, "grid_row": 0, "wetland_context_pixels": 20},
+            {
+                "grid_col": adjacent_coordinate[0],
+                "grid_row": adjacent_coordinate[1],
+                "wetland_context_pixels": 5,
+            },
+        ]
+    )
+    result = calculate_indicators(candidate_frame([(0, 0)]), grid).iloc[0]
+
+    assert result.riparian_focal_fraction == pytest.approx(0.20)
+    assert result.riparian_adjacent_fraction == pytest.approx(0.05)
+    assert result.riparian_near_fraction == pytest.approx(0.20)
+
+
+def test_near_fraction_uses_adjacent_when_adjacent_is_greater() -> None:
+    adjacent_coordinate = RING_1_OFFSETS[0]
+    grid = grid_frame(
+        [
+            {"grid_col": 0, "grid_row": 0, "wetland_context_pixels": 1},
+            {
+                "grid_col": adjacent_coordinate[0],
+                "grid_row": adjacent_coordinate[1],
+                "wetland_context_pixels": 30,
+            },
+        ]
+    )
+    result = calculate_indicators(candidate_frame([(0, 0)]), grid).iloc[0]
+
+    assert result.riparian_near_fraction == pytest.approx(0.30)
+
+
+def test_near_fraction_equality_zero_bounds_and_local_independence() -> None:
+    adjacent_coordinate = RING_1_OFFSETS[0]
+    second_ring_coordinate = next(
+        coordinate for coordinate in LOCAL_OFFSETS if coordinate not in RING_1_OFFSETS
+    )
+
+    equality_grid = grid_frame(
+        [
+            {"grid_col": 0, "grid_row": 0, "wetland_context_pixels": 20},
+            {
+                "grid_col": adjacent_coordinate[0],
+                "grid_row": adjacent_coordinate[1],
+                "wetland_context_pixels": 20,
+            },
+        ]
+    )
+    equality = calculate_indicators(candidate_frame([(0, 0)]), equality_grid).iloc[0]
+    assert equality.riparian_near_fraction == pytest.approx(0.20)
+    assert equality.riparian_near_fraction == equality.riparian_focal_fraction
+    assert equality.riparian_near_fraction == equality.riparian_adjacent_fraction
+
+    zero_grid = grid_frame([{"grid_col": 0, "grid_row": 0}])
+    zero = calculate_indicators(candidate_frame([(0, 0)]), zero_grid).iloc[0]
+    assert zero.riparian_near_fraction == pytest.approx(0.0)
+
+    bounded_grid = grid_frame(
+        [
+            {
+                "grid_col": 0,
+                "grid_row": 0,
+                "terrestrial_land_pixels": 0,
+                "inland_water_pixels": 100,
+            },
+            {
+                "grid_col": adjacent_coordinate[0],
+                "grid_row": adjacent_coordinate[1],
+                "terrestrial_land_pixels": 0,
+                "inland_water_pixels": 100,
+            },
+        ]
+    )
+    bounded = calculate_indicators(candidate_frame([(0, 0)]), bounded_grid).iloc[0]
+    assert 0 <= bounded.riparian_near_fraction <= 1
+
+    local_low = calculate_indicators(candidate_frame([(0, 0)]), equality_grid).iloc[0]
+    local_high_grid = grid_frame(
+        [
+            *equality_grid.to_dict("records"),
+            {
+                "grid_col": second_ring_coordinate[0],
+                "grid_row": second_ring_coordinate[1],
+                "wetland_context_pixels": 100,
+            },
+        ]
+    )
+    local_high = calculate_indicators(candidate_frame([(0, 0)]), local_high_grid).iloc[0]
+    assert local_high.riparian_near_fraction == local_low.riparian_near_fraction
+    assert local_high.riparian_local_fraction > local_low.riparian_local_fraction

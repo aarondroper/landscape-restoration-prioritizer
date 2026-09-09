@@ -81,6 +81,7 @@ OUTPUT_COLUMNS = (
     "hex_id",
     "riparian_focal_fraction",
     "riparian_adjacent_fraction",
+    "riparian_near_fraction",
     "riparian_local_fraction",
     "focal_wetland_fraction",
     "focal_inland_water_fraction",
@@ -129,6 +130,9 @@ SCALE_FIELDS = {
         "water_only_positions": "local_water_only_positions",
     },
 }
+
+RIPARIAN_SCALES = ("focal", "adjacent", "near", "local")
+NEAR_FRACTION_FIELD = "riparian_near_fraction"
 
 
 class RiparianOpportunityError(ValueError):
@@ -354,6 +358,12 @@ def calculate_indicators(
                 "local_has_hydrologic_context": scale_values["local"]["hydrologic_pixels"] > 0,
             }
         )
+        record[NEAR_FRACTION_FIELD] = float(
+            np.fmax(
+                record["riparian_focal_fraction"],
+                record["riparian_adjacent_fraction"],
+            )
+        )
         records.append(record)
 
     indicators = pd.DataFrame.from_records(records)
@@ -384,6 +394,20 @@ def _validate_indicator_values(indicators: pd.DataFrame) -> None:
         valid = np.isfinite(raw) & np.isfinite(combined)
         if not np.allclose(combined[valid], raw[valid], rtol=0, atol=1e-12):
             raise RiparianOpportunityError(f"{scale} wetland and inland-water fractions do not sum")
+    near = indicators[NEAR_FRACTION_FIELD].to_numpy(dtype=float)
+    focal = indicators["riparian_focal_fraction"].to_numpy(dtype=float)
+    adjacent = indicators["riparian_adjacent_fraction"].to_numpy(dtype=float)
+    valid_near = np.isfinite(near)
+    if np.any((near[valid_near] < 0) | (near[valid_near] > 1)):
+        raise RiparianOpportunityError("Near riparian fractions must lie in [0, 1]")
+    valid_max = valid_near & (np.isfinite(focal) | np.isfinite(adjacent))
+    expected = np.fmax(focal[valid_max], adjacent[valid_max])
+    if not np.allclose(near[valid_max], expected, rtol=0, atol=1e-12, equal_nan=True):
+        raise RiparianOpportunityError("Near riparian fraction must equal max(focal, adjacent)")
+    if np.any(valid_max & np.isfinite(focal) & (near < focal)):
+        raise RiparianOpportunityError("Near riparian fraction cannot be below focal fraction")
+    if np.any(valid_max & np.isfinite(adjacent) & (near < adjacent)):
+        raise RiparianOpportunityError("Near riparian fraction cannot be below adjacent fraction")
 
 
 def _read_study_geometry(path: Path) -> Any:
@@ -588,6 +612,217 @@ def _percentage(count: int, total: int) -> float:
     return float(100.0 * count / total) if total else 0.0
 
 
+def _fraction_field(scale: str) -> str:
+    return NEAR_FRACTION_FIELD if scale == "near" else SCALE_FIELDS[scale]["fraction"]
+
+
+def _near_control_diagnostics(frame: pd.DataFrame) -> dict[str, Any]:
+    focal = frame["riparian_focal_fraction"].to_numpy(dtype=float)
+    adjacent = frame["riparian_adjacent_fraction"].to_numpy(dtype=float)
+    valid = np.isfinite(focal) & np.isfinite(adjacent)
+    focal_wins = valid & (focal > adjacent)
+    adjacent_wins = valid & (adjacent > focal)
+    ties = valid & (focal == adjacent)
+    differences = np.abs(focal[valid] - adjacent[valid])
+    return {
+        "focal_gt_adjacent": {
+            "count": int(focal_wins.sum()),
+            "percent": _percentage(int(focal_wins.sum()), len(frame)),
+        },
+        "adjacent_gt_focal": {
+            "count": int(adjacent_wins.sum()),
+            "percent": _percentage(int(adjacent_wins.sum()), len(frame)),
+        },
+        "focal_eq_adjacent": {
+            "count": int(ties.sum()),
+            "percent": _percentage(int(ties.sum()), len(frame)),
+        },
+        "comparison_missing_count": int((~valid).sum()),
+        "absolute_focal_adjacent_difference": _distribution(pd.Series(differences)),
+        "absolute_difference_mean": float(np.mean(differences)) if differences.size else None,
+    }
+
+
+def _threshold_diagnostics(values: pd.Series) -> dict[str, dict[str, float | int]]:
+    numeric = pd.to_numeric(values, errors="coerce")
+    total = len(numeric)
+    thresholds = {
+        "near_eq_0": numeric == 0,
+        "near_gt_0": numeric > 0,
+        "near_ge_1_percent": numeric >= 0.01,
+        "near_ge_5_percent": numeric >= 0.05,
+        "near_ge_10_percent": numeric >= 0.10,
+        "near_ge_25_percent": numeric >= 0.25,
+        "near_ge_50_percent": numeric >= 0.50,
+    }
+    return {
+        label: {"count": int(mask.sum()), "percent": _percentage(int(mask.sum()), total)}
+        for label, mask in thresholds.items()
+    }
+
+
+def _rank_change_diagnostics(frame: pd.DataFrame) -> dict[str, Any]:
+    pair = (
+        frame[["riparian_focal_fraction", NEAR_FRACTION_FIELD]]
+        .apply(pd.to_numeric, errors="coerce")
+        .dropna()
+    )
+    if len(pair) < 2:
+        return {
+            "n": int(len(pair)),
+            "spearman": None,
+            "median_absolute_percentile_rank_change": None,
+            "p90_absolute_percentile_rank_change": None,
+            "moved_ge_10_percentile_points": {"count": 0, "percent": 0.0},
+            "moved_ge_25_percentile_points": {"count": 0, "percent": 0.0},
+        }
+    n = len(pair)
+    focal_rank = (pair["riparian_focal_fraction"].rank(method="average") - 1) / (n - 1) * 100
+    near_rank = (pair[NEAR_FRACTION_FIELD].rank(method="average") - 1) / (n - 1) * 100
+    change = (near_rank - focal_rank).abs()
+    return {
+        "n": int(n),
+        "spearman": float(focal_rank.corr(near_rank, method="pearson")),
+        "temporary_rank_definition": "100 * (average ascending rank - 1) / (N - 1), calculated in memory for diagnostics only",
+        "median_absolute_percentile_rank_change": float(change.median()),
+        "p90_absolute_percentile_rank_change": float(change.quantile(0.90)),
+        "moved_ge_10_percentile_points": {
+            "count": int((change >= 10).sum()),
+            "percent": _percentage(int((change >= 10).sum()), n),
+        },
+        "moved_ge_25_percentile_points": {
+            "count": int((change >= 25).sum()),
+            "percent": _percentage(int((change >= 25).sum()), n),
+        },
+    }
+
+
+def _character_diagnostics(
+    frame: pd.DataFrame, scale: str, mask: pd.Series | np.ndarray | None = None
+) -> dict[str, Any]:
+    fields = SCALE_FIELDS[scale]
+    subset = frame if mask is None else frame.loc[mask]
+    wetland = subset[fields["wetland_pixels"]].to_numpy(dtype=float)
+    water = subset[fields["water_pixels"]].to_numpy(dtype=float)
+    categories = {
+        "wetland": wetland > water,
+        "inland_water": water > wetland,
+        "mixed_tie": wetland == water,
+    }
+    return {
+        "scale": scale,
+        "candidate_count": int(len(subset)),
+        "wetland_pixel_sum": int(wetland.sum()),
+        "inland_water_pixel_sum": int(water.sum()),
+        "wetland_fraction_mean": float(subset[fields["wetland_fraction"]].mean())
+        if len(subset)
+        else None,
+        "inland_water_fraction_mean": float(subset[fields["water_fraction"]].mean())
+        if len(subset)
+        else None,
+        "primarily": {
+            label: {
+                "count": int(category.sum()),
+                "percent": _percentage(int(category.sum()), len(subset)),
+            }
+            for label, category in categories.items()
+        },
+        "rule": "wetland contribution > inland-water contribution => wetland; inland-water contribution > wetland contribution => inland water; equality => mixed/tie",
+    }
+
+
+def _same_habitat_context_contrasts(joined: pd.DataFrame) -> dict[str, Any]:
+    tolerance = 0.5
+    ordered = joined.sort_values(["habitat_context_score", "hex_id"], kind="mergesort").reset_index(
+        drop=True
+    )
+    pairs: list[dict[str, Any]] = []
+    for index in range(len(ordered) - 1):
+        first = ordered.iloc[index]
+        second = ordered.iloc[index + 1]
+        if (
+            abs(float(first.habitat_context_score) - float(second.habitat_context_score))
+            <= tolerance
+        ):
+            pairs.append(
+                {
+                    "habitat_score_difference": abs(
+                        float(first.habitat_context_score) - float(second.habitat_context_score)
+                    ),
+                    "focal_fraction_difference": abs(
+                        float(first.riparian_focal_fraction) - float(second.riparian_focal_fraction)
+                    ),
+                    "near_fraction_difference": abs(
+                        float(first.riparian_near_fraction) - float(second.riparian_near_fraction)
+                    ),
+                    "first": {
+                        "hex_id": str(first.hex_id),
+                        "habitat_context_score": float(first.habitat_context_score),
+                        "riparian_focal_fraction": float(first.riparian_focal_fraction),
+                        "riparian_near_fraction": float(first.riparian_near_fraction),
+                    },
+                    "second": {
+                        "hex_id": str(second.hex_id),
+                        "habitat_context_score": float(second.habitat_context_score),
+                        "riparian_focal_fraction": float(second.riparian_focal_fraction),
+                        "riparian_near_fraction": float(second.riparian_near_fraction),
+                    },
+                }
+            )
+    return {
+        "habitat_score_tolerance_points": tolerance,
+        "method": "adjacent rows after sorting by Habitat Context score; retain pairs within tolerance and show largest riparian differences",
+        "focal": sorted(pairs, key=lambda item: item["focal_fraction_difference"], reverse=True)[
+            :3
+        ],
+        "near": sorted(pairs, key=lambda item: item["near_fraction_difference"], reverse=True)[:3],
+    }
+
+
+def _top_tail_diagnostics(joined: pd.DataFrame) -> dict[str, Any]:
+    diagnostics: dict[str, Any] = {}
+    ordered = joined.sort_values(
+        [NEAR_FRACTION_FIELD, "hex_id"], ascending=[False, True], kind="mergesort"
+    ).reset_index(drop=True)
+    for label, proportion in (
+        ("top_10_percent", 0.10),
+        ("top_5_percent", 0.05),
+        ("top_1_percent", 0.01),
+    ):
+        count = max(1, int(math.ceil(len(ordered) * proportion)))
+        subset = ordered.head(count)
+        diagnostics[label] = {
+            "candidate_count": int(len(subset)),
+            "near_cutoff_included": float(subset[NEAR_FRACTION_FIELD].min()),
+            "habitat_context_score": _distribution(subset["habitat_context_score"]),
+            "focal_contributions": _character_diagnostics(subset, "focal"),
+            "adjacent_contributions": _character_diagnostics(subset, "adjacent"),
+        }
+    return diagnostics
+
+
+def _boundary_top_tail_diagnostics(joined: pd.DataFrame) -> dict[str, Any]:
+    ordered = joined.sort_values(
+        [NEAR_FRACTION_FIELD, "hex_id"], ascending=[False, True], kind="mergesort"
+    ).reset_index(drop=True)
+    result: dict[str, Any] = {}
+    for label, proportion in (
+        ("top_10_percent", 0.10),
+        ("top_5_percent", 0.05),
+        ("top_1_percent", 0.01),
+    ):
+        count = max(1, int(math.ceil(len(ordered) * proportion)))
+        subset = ordered.head(count)
+        edge_count = int(subset["boundary_edge_flag"].sum())
+        result[label] = {
+            "top_candidate_count": int(len(subset)),
+            "boundary_edge_count": edge_count,
+            "boundary_edge_percent_of_top": _percentage(edge_count, len(subset)),
+            "boundary_edge_percent_of_population": _percentage(edge_count, len(joined)),
+        }
+    return result
+
+
 def _scale_summary(frame: pd.DataFrame, scale: str) -> dict[str, Any]:
     fields = SCALE_FIELDS[scale]
     fraction = frame[fields["fraction"]]
@@ -657,6 +892,55 @@ def _record(row: pd.Series, fields: tuple[str, ...]) -> dict[str, Any]:
     return result
 
 
+def _top_near_examples(joined: pd.DataFrame, limit: int = 10) -> list[dict[str, Any]]:
+    sorted_rows = joined.sort_values(
+        [NEAR_FRACTION_FIELD, "hex_id"], ascending=[False, True], kind="mergesort"
+    ).head(limit)
+    examples: list[dict[str, Any]] = []
+    for _, row in sorted_rows.iterrows():
+        focal = float(row["riparian_focal_fraction"])
+        adjacent = float(row["riparian_adjacent_fraction"])
+        controlling = "focal" if focal > adjacent else "adjacent" if adjacent > focal else "tie"
+        contribution_scale = "focal" if controlling in ("focal", "tie") else "adjacent"
+        contribution_fields = SCALE_FIELDS[contribution_scale]
+        examples.append(
+            {
+                "hex_id": str(row["hex_id"]),
+                "riparian_focal_fraction": focal,
+                "riparian_adjacent_fraction": adjacent,
+                "riparian_near_fraction": float(row[NEAR_FRACTION_FIELD]),
+                "riparian_local_fraction": float(row["riparian_local_fraction"]),
+                "controlling_scale": controlling,
+                "relevant_wetland_contribution_pixels": int(
+                    row[contribution_fields["wetland_pixels"]]
+                ),
+                "relevant_inland_water_contribution_pixels": int(
+                    row[contribution_fields["water_pixels"]]
+                ),
+                "focal_wetland_contribution_pixels": int(
+                    row[SCALE_FIELDS["focal"]["wetland_pixels"]]
+                ),
+                "focal_inland_water_contribution_pixels": int(
+                    row[SCALE_FIELDS["focal"]["water_pixels"]]
+                ),
+                "adjacent_wetland_contribution_pixels": int(
+                    row[SCALE_FIELDS["adjacent"]["wetland_pixels"]]
+                ),
+                "adjacent_inland_water_contribution_pixels": int(
+                    row[SCALE_FIELDS["adjacent"]["water_pixels"]]
+                ),
+                "habitat_context_score": float(row["habitat_context_score"]),
+                "ecological_network_score": float(row["ecological_network_score"]),
+                "candidate_fraction_of_terrestrial": float(
+                    row["candidate_fraction_of_terrestrial"]
+                ),
+                "boundary_edge_flag": bool(row["boundary_edge_flag"]),
+                "sea_presence": bool(row["contains_sea_pixels"]),
+            }
+        )
+    return examples
+
+
 def _top_examples(joined: pd.DataFrame, scale: str, limit: int = 10) -> list[dict[str, Any]]:
     fields = SCALE_FIELDS[scale]
     sorted_rows = joined.sort_values(
@@ -695,8 +979,7 @@ def _group_diagnostics(joined: pd.DataFrame, group_field: str) -> dict[str, Any]
             "candidate_count": int(len(subset)),
             "candidate_percent": _percentage(len(subset), len(joined)),
             "indicator_distributions": {
-                scale: _distribution(subset[SCALE_FIELDS[scale]["fraction"]])
-                for scale in SCALE_FIELDS
+                scale: _distribution(subset[_fraction_field(scale)]) for scale in RIPARIAN_SCALES
             },
         }
     return result
@@ -819,13 +1102,27 @@ def build_riparian_opportunity(
     joined["boundary_edge_flag"] = joined["boundary_edge_flag"].astype(bool)
 
     scales = list(SCALE_FIELDS)
+    audit_scales = list(RIPARIAN_SCALES)
     scale_summaries = {scale: _scale_summary(joined, scale) for scale in scales}
+    near_summary = {
+        "fraction_distribution": _distribution(joined[NEAR_FRACTION_FIELD]),
+        "bins": _fraction_bins(joined[NEAR_FRACTION_FIELD]),
+    }
     zero_denominators = {
         scale: int(joined[SCALE_FIELDS[scale]["fraction"]].isna().sum()) for scale in scales
     }
     scale_correlations = {
         "focal_vs_adjacent": _correlation(
             joined["riparian_focal_fraction"], joined["riparian_adjacent_fraction"]
+        ),
+        "near_vs_focal": _correlation(
+            joined[NEAR_FRACTION_FIELD], joined["riparian_focal_fraction"]
+        ),
+        "near_vs_adjacent": _correlation(
+            joined[NEAR_FRACTION_FIELD], joined["riparian_adjacent_fraction"]
+        ),
+        "near_vs_local": _correlation(
+            joined[NEAR_FRACTION_FIELD], joined["riparian_local_fraction"]
         ),
         "focal_vs_local": _correlation(
             joined["riparian_focal_fraction"], joined["riparian_local_fraction"]
@@ -837,16 +1134,16 @@ def build_riparian_opportunity(
     distinctness = {
         scale: {
             "habitat_context_local_fraction": _correlation(
-                joined[SCALE_FIELDS[scale]["fraction"]], joined["habitat_context_local_fraction"]
+                joined[_fraction_field(scale)], joined["habitat_context_local_fraction"]
             ),
             "habitat_context_score": _correlation(
-                joined[SCALE_FIELDS[scale]["fraction"]], joined["habitat_context_score"]
+                joined[_fraction_field(scale)], joined["habitat_context_score"]
             ),
             "ecological_network_context_score": _correlation(
-                joined[SCALE_FIELDS[scale]["fraction"]], joined["ecological_network_score"]
+                joined[_fraction_field(scale)], joined["ecological_network_score"]
             ),
         }
-        for scale in scales
+        for scale in audit_scales
     }
     composition_fields = {
         "candidate_fraction_of_terrestrial": "candidate_fraction_of_terrestrial",
@@ -856,10 +1153,51 @@ def build_riparian_opportunity(
     }
     composition_correlations = {
         scale: {
-            field: _correlation(joined[SCALE_FIELDS[scale]["fraction"]], joined[source_field])
+            field: _correlation(joined[_fraction_field(scale)], joined[source_field])
             for field, source_field in composition_fields.items()
         }
-        for scale in scales
+        for scale in audit_scales
+    }
+
+    near_controls = _near_control_diagnostics(joined)
+    near_thresholds = _threshold_diagnostics(joined[NEAR_FRACTION_FIELD])
+    rank_changes = _rank_change_diagnostics(joined)
+    focal_gt_adjacent_mask = (
+        joined["riparian_focal_fraction"] > joined["riparian_adjacent_fraction"]
+    )
+    adjacent_gt_focal_mask = (
+        joined["riparian_adjacent_fraction"] > joined["riparian_focal_fraction"]
+    )
+    controlling_character = {
+        "focal_gt_adjacent": _character_diagnostics(joined, "focal", focal_gt_adjacent_mask),
+        "adjacent_gt_focal": _character_diagnostics(joined, "adjacent", adjacent_gt_focal_mask),
+        "rule": "For each controlling group, compare that scale's wetland and inland-water pixel contributions; larger contribution is primary and equality is mixed/tie.",
+    }
+
+    rescue_masks = {
+        "focal_le_1_percent_adjacent_ge_10_percent": (joined["riparian_focal_fraction"] <= 0.01)
+        & (joined["riparian_adjacent_fraction"] >= 0.10),
+        "focal_le_1_percent_adjacent_ge_25_percent": (joined["riparian_focal_fraction"] <= 0.01)
+        & (joined["riparian_adjacent_fraction"] >= 0.25),
+        "focal_ge_10_percent_adjacent_le_1_percent": (joined["riparian_focal_fraction"] >= 0.10)
+        & (joined["riparian_adjacent_fraction"] <= 0.01),
+    }
+    rescue_diagnostics = {
+        label: {
+            "candidate_count": int(mask.sum()),
+            "candidate_percent": _percentage(int(mask.sum()), len(joined)),
+            "median_habitat_context_score": float(
+                joined.loc[mask, "habitat_context_score"].median()
+            )
+            if mask.any()
+            else None,
+            "median_network_context_score": float(
+                joined.loc[mask, "ecological_network_score"].median()
+            )
+            if mask.any()
+            else None,
+        }
+        for label, mask in rescue_masks.items()
     }
 
     step6_units = gpd.read_file(step6_analysis_units_path, layer=STEP6_ANALYSIS_UNITS_LAYER)
@@ -943,6 +1281,89 @@ def build_riparian_opportunity(
         "edge_count": int(joined["boundary_edge_flag"].sum()),
         "edge_percent": _percentage(int(joined["boundary_edge_flag"].sum()), len(joined)),
         "by_boundary_flag": _group_diagnostics(joined, "boundary_edge_flag"),
+        "top_tail_boundary_counts": _boundary_top_tail_diagnostics(joined),
+    }
+    all_raw_fraction_fields = [
+        "riparian_focal_fraction",
+        "riparian_adjacent_fraction",
+        NEAR_FRACTION_FIELD,
+        "riparian_local_fraction",
+    ]
+    raw_fraction_values = joined[all_raw_fraction_fields].to_numpy(dtype=float)
+    near_values = joined[NEAR_FRACTION_FIELD].to_numpy(dtype=float)
+    focal_values = joined["riparian_focal_fraction"].to_numpy(dtype=float)
+    adjacent_values = joined["riparian_adjacent_fraction"].to_numpy(dtype=float)
+    finite_pair = np.isfinite(focal_values) & np.isfinite(adjacent_values)
+    expected_near = np.fmax(focal_values[finite_pair], adjacent_values[finite_pair])
+    near_validation = {
+        "near_formula": "riparian_near_fraction = max(riparian_focal_fraction, riparian_adjacent_fraction)",
+        "near_range": [0, 1],
+        "all_raw_fractions_finite": bool(np.isfinite(raw_fraction_values).all()),
+        "all_raw_fractions_in_0_1": bool(
+            ((raw_fraction_values >= 0) & (raw_fraction_values <= 1)).all()
+        ),
+        "near_equals_exact_max_count": int(
+            np.count_nonzero(near_values[finite_pair] == expected_near)
+        ),
+        "near_equals_exact_max": bool(np.array_equal(near_values[finite_pair], expected_near)),
+        "near_ge_focal_count": int(
+            np.count_nonzero(near_values[finite_pair] >= focal_values[finite_pair])
+        ),
+        "near_ge_focal": bool(np.all(near_values[finite_pair] >= focal_values[finite_pair])),
+        "near_ge_adjacent_count": int(
+            np.count_nonzero(near_values[finite_pair] >= adjacent_values[finite_pair])
+        ),
+        "near_ge_adjacent": bool(np.all(near_values[finite_pair] >= adjacent_values[finite_pair])),
+        "focal_eq_adjacent_near_eq_both_count": int(
+            np.count_nonzero(
+                (focal_values[finite_pair] == adjacent_values[finite_pair])
+                & (near_values[finite_pair] == focal_values[finite_pair])
+            )
+        ),
+        "no_nan_or_inf_in_real_output": bool(np.isfinite(near_values).all()),
+    }
+    same_context_contrasts = _same_habitat_context_contrasts(joined)
+    high_near_diagnostics = _top_tail_diagnostics(joined)
+    selection_comparison = {
+        "focal": {
+            "distribution": _distribution(joined["riparian_focal_fraction"]),
+            "bins": _fraction_bins(joined["riparian_focal_fraction"]),
+            "zero_rate": _percentage(
+                int((joined["riparian_focal_fraction"] == 0).sum()), len(joined)
+            ),
+            "habitat_context_correlations": distinctness["focal"],
+            "network_context_correlations": distinctness["focal"][
+                "ecological_network_context_score"
+            ],
+            "candidate_composition_correlations": composition_correlations["focal"],
+            "boundary_rescue_behavior": rescue_diagnostics,
+            "rank_change_against_near": rank_changes,
+            "ease_of_interpretation": "Direct hydrologic-context fraction inside the candidate hex.",
+            "known_weaknesses": [
+                "Sensitive to whether a hydrologic feature falls inside the arbitrary focal hex boundary.",
+                "Can miss strong immediately adjacent context when the focal cell contains little hydrologic context.",
+            ],
+        },
+        "near_max_focal_adjacent": {
+            "formula": "max(riparian_focal_fraction, riparian_adjacent_fraction)",
+            "distribution": near_summary["fraction_distribution"],
+            "bins": near_summary["bins"],
+            "zero_rate": _percentage(int((joined[NEAR_FRACTION_FIELD] == 0).sum()), len(joined)),
+            "habitat_context_correlations": distinctness["near"],
+            "network_context_correlations": distinctness["near"][
+                "ecological_network_context_score"
+            ],
+            "candidate_composition_correlations": composition_correlations["near"],
+            "boundary_rescue_behavior": rescue_diagnostics,
+            "rank_change_against_focal": rank_changes,
+            "ease_of_interpretation": "The stronger raw hydrologic-context signal observed in the focal or six directly adjacent positions.",
+            "known_weaknesses": [
+                "May be more correlated with Habitat Context than focal alone.",
+                "Can favor noisy extreme values and overlap with wetlands already represented by Habitat Context.",
+                "Does not distinguish focal from adjacent support after taking the maximum.",
+            ],
+        },
+        "final_scale_selected": False,
     }
     provenance: dict[str, Any] = {
         "component_working_name": "Riparian Opportunity",
@@ -988,6 +1409,22 @@ def build_riparian_opportunity(
             "water_only_positions": "included when NMD-valid and inland-water pixels are positive, even if terrestrial pixels are zero",
             "zero_denominator": "fraction is missing/NaN and is reported; never silently assigned zero",
         },
+        "near_indicator": {
+            "field": NEAR_FRACTION_FIELD,
+            "formula": "riparian_near_fraction = max(riparian_focal_fraction, riparian_adjacent_fraction)",
+            "range": [0, 1],
+            "interpretation": "The stronger hydrologic-context signal observed either within the candidate hex itself or across its six directly adjacent hex positions.",
+            "rationale": "Reduce sensitivity to arbitrary placement of a wetland/lake relative to a 500 m hex boundary without inventing weights, diluting focal context, or adding distance weighting.",
+            "not_used": [
+                "average",
+                "weighted average",
+                "sum",
+                "union/probability formula",
+                "multiplication",
+                "Habitat Context adjustment",
+                "distance weighting",
+            ],
+        },
         "candidate_population_validation": {
             "candidate_input_count": int(len(candidates_geo)),
             "output_rows": int(len(output)),
@@ -1000,10 +1437,17 @@ def build_riparian_opportunity(
         },
         "zero_denominator_counts": zero_denominators,
         "indicator_distributions": scale_summaries,
+        "near_distribution": near_summary,
+        "near_control_diagnostics": near_controls,
+        "near_threshold_diagnostics": near_thresholds,
+        "near_validation": near_validation,
         "scale_correlations": scale_correlations,
         "distinctness_from_finalized_components": distinctness,
         "wetland_vs_inland_water_contributions": scale_summaries,
         "candidate_composition_relationships": composition_correlations,
+        "controlling_scale_wetland_vs_inland_water": controlling_character,
+        "focal_vs_near_rank_change_diagnostics": rank_changes,
+        "hex_boundary_rescue_diagnostics": rescue_diagnostics,
         "sea_effect_diagnostics": _group_diagnostics(joined, "contains_sea_pixels"),
         "boundary_diagnostics": boundary_diagnostics,
         "hydrologic_presence_counts": {
@@ -1011,6 +1455,10 @@ def build_riparian_opportunity(
         },
         "water_only_grid_support_check": water_only_support,
         "top_raw_riparian_examples": {scale: _top_examples(joined, scale) for scale in scales},
+        "top_near_examples": _top_near_examples(joined),
+        "same_habitat_context_contrasts": same_context_contrasts,
+        "high_near_low_habitat_diagnostics": high_near_diagnostics,
+        "factual_focal_vs_near_selection_comparison": selection_comparison,
         "spatial_sanity": offset_sanity,
         "output": {
             "path": str(output_path),
@@ -1023,7 +1471,7 @@ def build_riparian_opportunity(
             "These are hydrologic land-cover context indicators, not functional hydrology, flood risk, water quality, stream order, catchment function, groundwater, connectivity, buffer suitability, or feasibility.",
             "NMD inland water and wetland are adequate for the contained MVP context audit but are not equivalent to a detailed hydrographic dataset.",
             "The current approximately 1 km county-edge limitation remains; context outside Skåne is unseen and is not corrected here.",
-            "No final riparian scale, normalization, score, weights, or overall restoration score is selected in Step 13.",
+            "No final riparian scale, normalization, score, weights, or overall restoration score is selected in Step 14.",
         ],
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime_seconds": time.perf_counter() - start,

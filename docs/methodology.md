@@ -421,7 +421,7 @@ neighbors at the county edge are retained as an MVP limitation and are not
 imputed or used to exclude candidates. The component is **IMPLEMENTED FOR
 MVP**.
 
-## RAW Riparian Opportunity indicators (Step 13)
+## RAW Riparian Opportunity indicators (Steps 13–14)
 
 Riparian Opportunity is a raw hydrological/riparian landscape-context
 component for eligible agricultural candidate hexagons. It asks approximately:
@@ -478,8 +478,37 @@ is retained as missing/NaN and reported in provenance. Diagnostic wetland and
 inland-water fractions and factual presence booleans are retained for audit;
 they are not separate scores.
 
-No final riparian scale, normalization, 0–100 score, weighting, or overall
-restoration score has been selected. Riparian Opportunity does not measure
+Step 13's raw-scale audit found that the local scale is too broad and
+redundant to remain under serious final-input consideration: its rank
+correlation with the adjacent scale was approximately 0.87, hydrologic
+presence was nearly universal, and its Habitat Context rank correlation was
+approximately 0.725. Focal and adjacent remain analytically useful. Focal was
+more distinct from Habitat Context (rank correlation approximately 0.475),
+while adjacent was more redundant (approximately 0.675), but focal can be
+sensitive to the arbitrary placement of a hydrologic feature relative to a
+500 m hex boundary.
+
+Step 14 therefore adds one additional raw diagnostic signal:
+
+```text
+riparian_near_fraction = max(
+    riparian_focal_fraction,
+    riparian_adjacent_fraction
+)
+```
+
+It represents the stronger hydrologic-context signal observed either within
+the candidate hex or across its six directly adjacent hex positions. The
+maximum is intentionally unweighted and bounded in `[0, 1]`; it does not use
+an average, sum, probability/union formula, multiplication, Habitat Context
+adjustment, or distance weighting. Step 14 audits whether it reduces
+focal-only hex-boundary sensitivity and whether it becomes excessively
+redundant with finalized Habitat Context. Focal, adjacent, local, and near are
+all retained as raw/provenance indicators.
+
+The Step 14 audit does not select a final riparian input. No final riparian
+scale, normalization, 0–100 score, weighting, or overall restoration score has
+been selected. Riparian Opportunity does not measure
 flood risk, water quality, stream order, catchment function, groundwater,
 hydrological connectivity, actual riparian-buffer suitability, or feasibility.
 NMD's representation of narrow streams may underrepresent them. No separate

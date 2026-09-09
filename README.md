@@ -14,8 +14,9 @@ recommendation or a scientific probability model.
 
 Ecological Network Context is implemented for the MVP using the finalized
 configuration-normalized input. RAW Riparian Opportunity indicators are under
-audit at three spatial scales; no riparian scale or score has been selected.
-The remaining prioritization components and overall score remain deferred.
+audit at focal, adjacent, local, and near-candidate scales; no riparian scale
+or score has been selected. The remaining prioritization components and
+overall score remain deferred.
 
 ## Intended architecture
 
@@ -188,7 +189,9 @@ python -m restoration_prioritizer.riparian_opportunity
 
 This derives raw wetland-plus-inland-water context directly from NMD2023,
 including inland-water-only grid positions omitted from the terrestrial Step 6
-analysis-unit artifact. It writes the three-scale raw indicator table to
+analysis-unit artifact. It writes the focal, adjacent, local, and
+near-candidate raw indicator table to
 `data/processed/indicators/riparian_opportunity.csv` and its audit/provenance
 manifest to the corresponding `.provenance.json` file. No riparian score or
-final scale is selected.
+final scale is selected. The near-candidate field is evaluated as the raw
+`max(focal, adjacent)` signal; it is not a score or normalization.
