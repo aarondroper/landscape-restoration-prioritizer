@@ -695,9 +695,67 @@ water-only coordinates that are absent from the terrestrial support table.
 Its `steps * 500 m` nominal metre field is a scale label rather than an exact
 Euclidean polygon-edge distance.
 
-These raw representations are being audited together; no focal/adjacent/local
-scale, distance representation, normalization, or Protected-Area Reinforcement
-score has been selected. The source legal geometries remain unchanged. The
-outside-Skåne 5 km source context retained in Step 16 remains limited here by
-the NMD terrestrial mask, which ends at the Skåne raster extent; the small
-cross-county candidate population is audited rather than solved in this step.
+These raw representations were audited together in Step 17. The source legal
+geometries remain unchanged. The outside-Skåne 5 km source context retained in
+Step 16 remains limited here by the NMD terrestrial mask, which ends at the
+Skåne raster extent; the small cross-county candidate population is audited
+rather than solved in the raw-indicator step.
+
+## Protected-Area Reinforcement component (Step 18)
+
+Protected-Area Reinforcement is **implemented for the MVP**. Its source network
+is the approved Naturvårdsverket footprint: national parks, nature reserves,
+and Natura 2000 SCI, SPA, and SPA/SCI polygons, physically unioned to avoid
+legal-designation overlap double-counting. Step 16 showed that the raw legal
+geometry is marine-inclusive: 1,627 candidates intersected it, while only
+1,583 had terrestrial focal support. The remaining 44 raw intersections are
+marine, inland-water, sliver, or otherwise unsupported by a terrestrial NMD
+pixel center. Raw marine-inclusive vector distance is therefore rejected as a
+scoring input.
+
+Step 17's NMD-terrestrial support solution is retained. A protected support
+pixel is an NMD 10 m pixel whose center lies within the unified footprint and
+whose NMD semantic role is `terrestrial_land`; the raw legal geometry itself
+is not clipped or modified. The final raw scoring input is solely
+`nearest_protected_hex_steps`, the minimum axial distance from a candidate grid
+position to any grid position containing protected-terrestrial support.
+Traversal is geometric lattice proximity and may cross water or other omitted
+grid positions. `nearest_protected_nominal_m` is only an explanatory `steps *
+500 m` label.
+
+For candidate (i), let (d_i) be `nearest_protected_hex_steps`. The final
+score is:
+
+```text
+if d_i == 0:
+    protected_area_reinforcement_score = 100
+else:
+    protected_area_reinforcement_score =
+        100 * (N_pos - average_positive_distance_rank_i + 1) / (N_pos + 1)
+```
+
+Distance zero uniquely means that the candidate analysis unit itself contains
+some formally protected terrestrial land under the NMD center-based support
+model. For positive distances, `N_pos` is the non-overlap candidate count and
+the ascending rank uses average ranks for ties. The positive distance is
+discrete, there is no defensible MVP basis for subtracting a fixed amount for
+each additional 500 m, and no hard ecological cutoff is justified. Reverse
+empirical ranking preserves nearer-is-better ordering on a common 0–100
+decision-support scale without inventing a distance-decay curve.
+
+`protected_focal_fraction`, `protected_adjacent_fraction`, and
+`protected_local_fraction` remain raw supporting diagnostics only. They are not
+combined with distance and do not contribute mathematically to the component;
+this prevents rewarding the same formal protection network twice. They may
+support later explanations, overlap-versus-proximity distinctions, and map
+inspection.
+
+The score is population-relative among non-overlap candidates. A score of 100
+does not mean that the whole hexagon is protected, nor does a non-overlap score
+such as 80 mean 80% protected land, conservation value, protection
+likelihood, ecological quality, or restoration suitability. Grid-step distance
+is not exact Euclidean polygon-edge distance, ecological movement distance,
+least-cost distance, species connectivity, or travel distance. No 5 km source
+acquisition buffer is used as a score threshold. Cross-county terrestrial
+support outside the Skåne NMD raster remains unavailable, and formal protection
+does not imply ecological quality or restoration feasibility.

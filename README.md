@@ -12,11 +12,10 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Habitat Context, Ecological Network Context, and Riparian Opportunity are
-implemented for the MVP using their finalized component definitions. The
-Protected-Area Reinforcement source/geometry foundation is implemented; its
-indicator and score remain undecided. The remaining prioritization components
-and overall score remain deferred.
+Habitat Context, Ecological Network Context, Riparian Opportunity, and
+Protected-Area Reinforcement are implemented for the MVP using their finalized
+component definitions. Land-Restoration Feasibility, component weights,
+presets, and the overall score remain deferred.
 
 ## Intended architecture
 
@@ -246,5 +245,19 @@ and nearest-hex-step diagnostics for all candidates to
 `data/processed/indicators/protected_area_reinforcement.csv`, a compact
 terrestrial grid table to `data/processed/protected_terrestrial_grid.csv`, and
 the audit/provenance manifest to the corresponding `.provenance.json` path.
-No Protected-Area Reinforcement scale, normalization, score, or weighting is
-selected.
+
+## Generate the Protected-Area Reinforcement component
+
+With the raw indicator, candidate population, and finalized component
+artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.protected_area_reinforcement_score
+```
+
+This uses `nearest_protected_hex_steps` as the sole scoring input. Distance
+zero receives 100; positive distances receive the approved reverse empirical
+average-rank score among non-overlap candidates. Focal, adjacent, and local
+protected-terrestrial fractions remain supporting diagnostics. The component
+artifact and component-specific provenance are written under
+`data/processed/components/`.
