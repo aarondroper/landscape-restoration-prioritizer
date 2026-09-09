@@ -649,5 +649,22 @@ does not prescribe later formulas prematurely.
   comparability.
 - The screening output will require ecological review and local investigation
   before any restoration decision.
+
+## Protected-Area Reinforcement source footprint (Step 16)
+
+The Protected-Area Reinforcement source footprint currently consists only of
+Naturvårdsverket national parks, nature reserves, and Natura 2000 `SCI`, `SPA`,
+and `SPA/SCI` polygons. Legal-designation overlaps are physically unioned so
+that the same area is represented once in the analytical footprint. The
+authoritative source geometry is preserved as polygonal geometry, including
+marine territory; no water clipping is applied at this stage.
+
+The ingestion retrieves selected features intersecting a fixed 5 km buffer
+around the SCB-derived Skåne study geometry. This outside-Skåne context exists
+only to support later proximity analysis and does not expand the candidate
+study region. The final Protected-Area Reinforcement indicator and scoring
+method remain undecided; Step 16 records source, geometry, overlap, and
+candidate-relationship diagnostics only.
+
 - No field validation, parcel-level feasibility assessment, landowner context,
   costs, or implementation constraints are included in this initial contract.

@@ -100,22 +100,37 @@ geometry or introduce disproportionate access and legal friction.
   description](https://geodata.naturvardsverket.se/nedladdning/naturvardsregistret/Naturvardsregistret_beskrivning_av_oppna_data.pdf).
 - **`SkyddadeOmraden`:** [WFS endpoint](https://geodata.naturvardsverket.se/naturvardsregistret/wfs),
   feature type `Naturvardsregistret_WFS:SkyddadeOmraden`. Use polygon
-  features filtered to national parks and nature reserves, with
-  `BESLUTSSTATUS=Gällande` where the status field supports that filter.
-  Useful fields include `NVRID`, `NAMN`, `SKYDDSTYP`, status and decision
-  dates, `LAN`, `KOMMUN`, and area fields.
+  features where `SKYDDSTYP` is exactly `Nationalpark` or `Naturreservat`
+  and `BESLUTSSTATUS` is exactly `Gällande`. The source `NVRID` and `NAMN`
+  fields are retained as normalized `source_id` and `name`; the source
+  designation and status are retained as `designation` and `source_status`.
 - **`N2000`:** [WFS endpoint](https://geodata.naturvardsverket.se/n2000/wfs),
-  feature type `N2000_WFS:N2000`. Include `OMRADESTYP` values `SCI`, `SPA`,
-  and `SPA/SCI` (Habitats Directive, Birds Directive, or both). Useful
-  fields include area, county/municipality, designation dates, and update
-  date.
-- **Geometry/CRS:** both services expose polygonal/multipolygon geometry and
-  support EPSG:3006; the WFS capabilities advertise machine-readable output
-  formats including GeoJSON/GeoPackage.
-- **License/access/update:** the open-data description states CC0 and national
-  coverage. Access is anonymous WFS. No fixed public refresh cadence was
-  identified; feature status, effective dates, update fields, and retrieval
-  timestamp must be retained.
+  feature type `N2000_WFS:N2000`. Include exactly `OMRADESTYP` values `SCI`,
+  `SPA`, and `SPA/SCI` (Habitats Directive, Birds Directive, or both). The
+  source `OMRADESKOD` and `OMRADESNAMN` fields are retained as normalized
+  `source_id` and `name`. The source exposes designation dates and update
+  dates, but no separate legal/current-status field; no status filter is
+  invented.
+- **Live service contract (verified 2026-09-09):** both services report WFS
+  version `2.0.0`, target-layer default CRS `urn:ogc:def:crs:EPSG::3006`,
+  and `DescribeFeatureType` geometry `gml:MultiSurfacePropertyType`. The
+  target layers are present. The services expose GML/XML
+  (`text/xml; subtype=gml/3.2`) rather than `application/json`; GeoJSON
+  probes were rejected. WFS 2.0.0 BBOX requests use the server's EPSG:3006
+  northing/easting axis order.
+- **Access/filtering:** access is anonymous and uses Python standard-library
+  HTTP GETs. Server-side BBOX filtering is used over the buffered study-area
+  bounds. Live impossible-value CQL/FES attribute-filter probes were ignored
+  by both services, so approved designation/status filters are applied and
+  validated locally. A deterministic 2×2 BBOX tile split avoids unreliable
+  paged responses, with 1 m overlap and authoritative-ID deduplication.
+- **License/update:** the open-data description states CC0 and national
+  coverage. No fixed public refresh cadence was identified; the service
+  response timestamp and local UTC retrieval timestamp are recorded.
+- **Local context:** features intersecting the SCB-derived Skåne study
+  geometry buffered by exactly 5,000 m are retained. The buffer is source
+  context for later proximity analysis only; it does not expand the candidate
+  study area and is not a future score threshold.
 - **Methodological caveat:** a site can be both Natura 2000 and a nature
   reserve/national park. The later protected-area geometry must be unioned or
   otherwise de-duplicated before physical-area measures; overlapping legal
@@ -207,9 +222,12 @@ environmental data:
   v2.1 ZIP advertised HTTP 200, byte ranges, and a 2,705,971,730-byte length;
   only archive metadata and small metadata material were inspected.
 - Naturvårdsverket WFS `GetCapabilities` and `DescribeFeatureType` succeeded
-  for both `SkyddadeOmraden` and `N2000`; EPSG:3006 and polygon geometry were
-  confirmed. Small attribute/sample responses confirmed the protected and
-  Natura type fields.
+  for both `SkyddadeOmraden` and `N2000`; WFS 2.0.0, EPSG:3006, polygon
+  geometry, and the exact source fields were confirmed. Bounded samples
+  confirmed national values `Nationalpark`, `Naturreservat`, and status
+  `Gällande`, plus Natura values `SCI`, `SPA`, and `SPA/SCI`. The live
+  services rejected GeoJSON and ignored CQL/FES attribute filters; GML/XML
+  was therefore preserved and all semantic filters are local.
 - SCB WFS `GetCapabilities` and `DescribeFeatureType` succeeded for
   `stat:DeSO_2025`; `lanskod`, version/reference-date fields, polygon geometry,
   and EPSG:3006 were confirmed.

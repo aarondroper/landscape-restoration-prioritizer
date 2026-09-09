@@ -14,7 +14,9 @@ recommendation or a scientific probability model.
 
 Habitat Context, Ecological Network Context, and Riparian Opportunity are
 implemented for the MVP using their finalized component definitions. The
-remaining prioritization components and overall score remain deferred.
+Protected-Area Reinforcement source/geometry foundation is implemented; its
+indicator and score remain undecided. The remaining prioritization components
+and overall score remain deferred.
 
 ## Intended architecture
 
@@ -210,3 +212,20 @@ value remains score 0; positive candidates receive
 for positive ties. It writes the component table and its component-specific
 audit/provenance manifest under `data/processed/components/`. Adjacent, near,
 and local raw indicators remain diagnostic and do not contribute to the score.
+
+## Generate the Protected-Area Reinforcement source footprint
+
+Run the live Naturvårdsverket ingestion with:
+
+```bash
+python -m restoration_prioritizer.protected_areas
+```
+
+This retrieves only national parks, nature reserves, and Natura 2000 `SCI`,
+`SPA`, and `SPA/SCI` features intersecting the Skåne study geometry plus a
+5 km outside-context buffer. It writes the normalized `national_protection`,
+`natura2000`, and physically deduplicated `protected_footprint` layers to
+`data/processed/protected_areas.gpkg`, with source-specific provenance in
+`data/processed/protected_areas.provenance.json`. The 5 km value is source
+context only; no Protected-Area Reinforcement score or distance threshold is
+defined here.
