@@ -260,6 +260,66 @@ complete to the territorial-water boundary and may include marine territory.
 Marine areas, inland water, built land, and other unsuitable areas remain for
 later NMD-based candidate-land logic and are not removed here.
 
+## Raw Ecological Network Context indicators (Step 10)
+
+Habitat Context measures the **amount** of the Step 5 structural
+`habitat_context_proxy` surrounding a candidate. Ecological Network Context is
+intended to measure a meaningfully different property: the **arrangement** of
+that surrounding habitat composition around the candidate. It asks whether a
+candidate is positioned between habitat concentrations in a way that
+restoration could plausibly strengthen landscape continuity across the
+candidate. This is a landscape-structure proxy, not a validated ecological
+corridor model.
+
+The calculation uses the immediate six-cell hex neighborhood from the full
+Step 6 analysis grid. Candidate units provide the focal population only;
+surrounding cells do not need to be eligible candidates. For each present
+neighbor, the factual composition is the continuous value
+`habitat_context_fraction_of_terrestrial`, equivalent to
+`habitat_context_pixels / terrestrial_pixels`. No habitat-rich-cell threshold,
+patch vectorization, or connected-component network is created. The focal
+cell's own composition is excluded.
+
+The six first-ring offsets form three opposing axes of the projected hex grid:
+
+| Axis | Opposite offsets |
+| --- | --- |
+| `axis_a` | `(-1, 0)` and `(1, 0)` |
+| `axis_b` | `(0, -1)` and `(0, 1)` |
+| `axis_c` | `(-1, 1)` and `(1, -1)` |
+
+These are grid axes and are not described as exact east-west, north-south, or
+other compass directions. Each raw axis bridge strength is the minimum of the
+two habitat fractions on its opposing sides:
+
+```text
+axis_bridge_strength = min(side_1_habitat_fraction, side_2_habitat_fraction)
+```
+
+The minimum is intentional: habitat on only one side cannot produce a strong
+opposing-side bridge signal. Two raw indicators are retained for review:
+
+- `bridge_strength_max` — the strongest of the three opposing-axis strengths.
+- `bridge_strength_mean` — the mean of the three opposing-axis strengths.
+
+Neither indicator has yet been selected as the final Ecological Network
+Context component input, normalized to 0–100, scored, or combined with another
+indicator. The output also records the selected strongest axis, its tie count,
+the number of missing adjacent grid positions, and the existing
+`boundary_edge_flag`.
+
+For this bridging calculation, a neighboring grid position absent from the
+full analysis grid is assigned habitat fraction zero and counted as missing.
+This differs intentionally from Habitat Context's denominator treatment.
+Missing positions may reflect non-terrestrial cells or truncation at the
+current Skåne source/study domain; no cross-county value is imputed, and edge
+candidates are not excluded or penalized.
+
+This indicator is not a species-connectivity or movement model. It applies no
+habitat-quality weighting, patch-size threshold, resistance surface, or
+species-specific dispersal distance. Its axis geometry is imposed by the
+500 m analysis grid, and cross-county context remains a known limitation.
+
 ## Planned analytical components
 
 Each candidate cell will retain five independently available component scores:

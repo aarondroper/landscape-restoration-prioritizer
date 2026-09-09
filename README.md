@@ -12,9 +12,9 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 9 implements the MVP Habitat Context component score for the deterministic
-candidate population. The other prioritization components and overall score
-remain deferred.
+Step 10 implements raw Ecological Network Context indicators for the
+deterministic candidate population. The final network input, other
+prioritization components, and overall score remain deferred.
 
 ## Intended architecture
 
@@ -145,3 +145,18 @@ This ranks `habitat_context_local_fraction` empirically within the eligible
 candidate population and writes the ignored component table and audit
 provenance under `data/processed/components/`. The first-ring indicator is
 retained for diagnostics only.
+
+## Generate raw Ecological Network Context indicators
+
+With the Step 6, Step 7, Step 8, and Step 9 artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.ecological_network
+```
+
+This evaluates the three opposing first-ring hex-grid axes using the minimum
+habitat fraction on each pair of sides. It writes two raw, unselected
+bridging indicators and diagnostics to
+`data/processed/indicators/ecological_network.csv`, with provenance in the
+corresponding `.provenance.json` file. No network score is selected or
+normalized in this step.
