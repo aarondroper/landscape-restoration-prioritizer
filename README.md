@@ -12,11 +12,9 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 4 implements reproducible acquisition and validation of the official
-Naturvårdsverket NMD2023 Basskikt v2.1 delivery and creates a native 10 m
-Skåne-only land-cover raster. The generated boundary remains an
-administrative/statistical study extent; no restoration or habitat class
-semantics have been defined yet.
+Step 6 implements the deterministic 500 m flat-to-flat EPSG:3006 analysis grid
+and factual NMD composition for each retained terrestrial unit. Candidate
+eligibility, ecological context indicators, and scoring remain deferred.
 
 ## Intended architecture
 
@@ -88,3 +86,18 @@ python -m restoration_prioritizer.nmd_semantics
 This performs a block-wise semantic audit and writes the ignored JSON report
 to `data/processed/nmd/nmd2023_v2_1_semantic_audit.json`. It does not create
 semantic-mask rasters.
+
+## Generate deterministic NMD analysis units
+
+With the processed Skåne raster and Step 5 semantic audit present, run:
+
+```bash
+python -m restoration_prioritizer.analysis_units
+```
+
+This writes the ignored regular pointy-top hexagon layer to
+`data/processed/analysis_units.gpkg` and its generated audit/provenance summary
+to `data/processed/analysis_units.provenance.json`. Complete hexagons are
+retained; only cells with zero terrestrial NMD pixels are removed. The command
+reports candidate-fraction and candidate-area threshold sensitivities as
+diagnostics only and does not select an eligibility threshold.

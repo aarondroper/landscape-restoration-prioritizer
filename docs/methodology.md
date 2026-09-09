@@ -15,11 +15,24 @@ scientific probability of restoration suitability.
 
 ## Analysis units and candidate land
 
-The planned analysis unit is an approximately **500 m hexagonal cell**. The
-exact construction may be adjusted if technical or data considerations justify
-it. Cells should ultimately be clipped or filtered to plausible candidate
-restoration land rather than scoring every location indiscriminately. The
-candidate-land definition, including treatment of land cover and obvious
+The Step 6 analysis unit is a regular **500 m flat-to-flat pointy-top hexagon**
+in **EPSG:3006**. Its side length is `500 / sqrt(3) = 288.6751346 m` and its
+theoretical complete area is `216,506.3509 m²` (21.6506351 ha). Every durable
+unit retains the complete regular geometry; it is not clipped to the coastline,
+administrative boundary, NMD footprint, or candidate pixels. Hexagons are
+analysis units, not parcels, and their boundaries have no ecological or legal
+meaning. They form a consistent regional screening tessellation.
+
+The grid is anchored mathematically at the fixed EPSG:3006 origin `(0, 0)`.
+For integer grid coordinates `(col, row)`, the center is
+`((col + row / 2) * 500 m, row * 1.5 * side)`, and the stable identifier is
+`h_<col>_<row>`. The same CRS, width, anchor, and raster extent therefore
+regenerate the same grid independently of boundary vertex ordering. The
+processed NMD raster supplies the factual spatial extent. Cells with no
+terrestrial NMD pixel are discarded; no minimum terrestrial percentage,
+minimum arable percentage, or minimum arable area has been selected.
+
+The candidate-land definition, including treatment of land cover and obvious
 constraints, is explicitly defined by the Step 5 NMD semantic contract below.
 It identifies pixels for later investigation; it does not establish
 restoration suitability, availability, or feasibility.
@@ -111,6 +124,14 @@ No mutually exclusive analysis-class raster is created. Future operations can
 derive the required masks directly from the compact categorical raster. Exact
 spatial indicators, neighborhood definitions, connectivity, normalization,
 weights, and scoring remain deferred.
+
+Step 6 measures factual in-cell NMD composition before any later spatial
+context scoring. NMD pixel centers are assigned to exactly one hexagon; the
+`all_touched` rule is not used. `terrestrial_fraction` is terrestrial pixel
+area divided by the complete hex area. Candidate and habitat-context
+fractions use terrestrial pixels as their denominator, which preserves the
+distinction between coastal/water composition and land composition. These
+fractions are descriptive land-cover measurements, not eligibility scores.
 
 The study-area identifiers are county/län code **12** and NUTS 3 code
 **SE224**. The reproducible boundary source is SCB DeSO 2025: select
