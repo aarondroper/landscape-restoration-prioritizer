@@ -668,3 +668,36 @@ candidate-relationship diagnostics only.
 
 - No field validation, parcel-level feasibility assessment, landowner context,
   costs, or implementation constraints are included in this initial contract.
+
+## Protected-Area Reinforcement terrestrial raw indicators (Step 17)
+
+The Step 16 protected footprint is formally authoritative but its overlap with
+the NMD study raster is marine-dominated. Raw distance to that unmodified
+marine-inclusive geometry is therefore retained only as a diagnostic and is
+not used directly as a final terrestrial restoration indicator.
+
+Step 17 derives analytical terrestrial protected support without changing the
+source GeoPackage. A 10 m NMD pixel is `protected_terrestrial` exactly when
+its pixel center is inside the unified `protected_footprint` and its NMD code
+belongs to the approved `terrestrial_land` role. Code 0/no-data, inland water
+(61), and sea (62) are excluded; artificial land remains terrestrial. The
+mask is not restricted to habitat, forest, wetland, natural, candidate, or
+non-agricultural land, so protected agricultural pixels remain eligible for
+measurement.
+
+Counts are assigned to the deterministic Step 6 500 m pointy-top axial grid
+using pixel centers and `all_touched=False`. Raw focal, six-position adjacent,
+and 18-position local protected-land fractions are pixel-weighted sums; the
+focal position is excluded from adjacent and local context, and missing or
+water-only positions contribute neither numerator nor denominator. A nearest
+protected hex-step diagnostic is propagated on the axial lattice, including
+water-only coordinates that are absent from the terrestrial support table.
+Its `steps * 500 m` nominal metre field is a scale label rather than an exact
+Euclidean polygon-edge distance.
+
+These raw representations are being audited together; no focal/adjacent/local
+scale, distance representation, normalization, or Protected-Area Reinforcement
+score has been selected. The source legal geometries remain unchanged. The
+outside-Skåne 5 km source context retained in Step 16 remains limited here by
+the NMD terrestrial mask, which ends at the Skåne raster extent; the small
+cross-county candidate population is audited rather than solved in this step.

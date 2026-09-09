@@ -229,3 +229,22 @@ This retrieves only national parks, nature reserves, and Natura 2000 `SCI`,
 `data/processed/protected_areas.provenance.json`. The 5 km value is source
 context only; no Protected-Area Reinforcement score or distance threshold is
 defined here.
+
+## Generate raw Protected-Area Reinforcement indicators
+
+With the processed protected footprint, NMD raster, Step 6 grid, candidate
+population, and finalized component artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.protected_area_reinforcement
+```
+
+This derives a grid-scale terrestrial protected-support table by requiring
+both pixel-center membership in the approved `protected_footprint` and the
+NMD `terrestrial_land` semantic role. It writes raw focal, adjacent, local,
+and nearest-hex-step diagnostics for all candidates to
+`data/processed/indicators/protected_area_reinforcement.csv`, a compact
+terrestrial grid table to `data/processed/protected_terrestrial_grid.csv`, and
+the audit/provenance manifest to the corresponding `.provenance.json` path.
+No Protected-Area Reinforcement scale, normalization, score, or weighting is
+selected.
