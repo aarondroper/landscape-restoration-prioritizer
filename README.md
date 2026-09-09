@@ -76,3 +76,15 @@ provenance, and removes the expanded national interim files after success.
 Reruns reuse a valid cached archive and regenerate the downstream artifact.
 The command fails closed if valid terrestrial pixels fall outside current
 v2.x coverage metadata.
+
+## Audit the NMD2023 semantic contract
+
+With the processed Skåne raster present, run:
+
+```bash
+python -m restoration_prioritizer.nmd_semantics
+```
+
+This performs a block-wise semantic audit and writes the ignored JSON report
+to `data/processed/nmd/nmd2023_v2_1_semantic_audit.json`. It does not create
+semantic-mask rasters.

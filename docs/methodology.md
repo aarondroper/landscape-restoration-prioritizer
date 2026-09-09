@@ -20,7 +20,9 @@ exact construction may be adjusted if technical or data considerations justify
 it. Cells should ultimately be clipped or filtered to plausible candidate
 restoration land rather than scoring every location indiscriminately. The
 candidate-land definition, including treatment of land cover and obvious
-constraints, remains to be validated against authoritative source data.
+constraints, is explicitly defined by the Step 5 NMD semantic contract below.
+It identifies pixels for later investigation; it does not establish
+restoration suitability, availability, or feasibility.
 
 The canonical analytical CRS is **SWEREF 99 TM (EPSG:3006)**, the national
 Swedish projected CRS used for metre-based distance, area, and hex-grid
@@ -43,9 +45,72 @@ SCB `study_area` artifact, the check found 11349.354 km² of terrestrial valid
 NMD data and no uncovered terrestrial pixels. It found 5753.0955 km² of sea
 and three code-0 no-data pixels inside the administrative/statistical extent;
 these are not treated as missing terrestrial NMD coverage. The NMD v2.1
-delivery is accepted as the primary Skåne raster source. These are acquisition
-and coverage facts only; no NMD class is assigned a restoration or habitat
-meaning here.
+delivery is accepted as the primary Skåne raster source. The approved semantic
+interpretation of those classes is defined below; it is a land-cover contract,
+not a suitability or scoring model.
+
+## NMD semantic contract (Step 5)
+
+NMD supplies land-cover structure. It does not directly measure ecological
+quality, habitat condition, biodiversity, ownership, restoration cost, actual
+restoration feasibility, or conservation consent/legal availability. The
+application therefore uses careful factual and analytical labels such as
+candidate land, habitat-context proxy, wetland context, and artificial
+constraint. A candidate pixel is a location for later investigation, not a
+claim that restoration is appropriate or available.
+
+The primary restoration-candidate definition for MVP v1 is exactly NMD class 3
+(`Åkermark`, arable agricultural land). This is deliberately limited to
+clearly human-managed land cover where conversion/restoration investigation is
+conceptually plausible. Existing forest, wetlands, open vegetated land,
+temporarily non-forest areas, artificial land, water, and sea are not primary
+candidate land. Peat extraction (class 54, `Torvtäkt`) is tracked as a separate
+factual group and is not silently added to the candidate mask.
+
+The source-controlled factual groups are mutually exclusive:
+
+| Factual group | NMD codes |
+| --- | --- |
+| `no_data` | 0 |
+| `arable` | 3 |
+| `artificial_building` | 51 |
+| `artificial_other` | 52 |
+| `artificial_transport` | 53 |
+| `peat_extraction` | 54 |
+| `inland_water` | 61 |
+| `sea` | 62 |
+| `established_forest_firm_ground` | 111–117 |
+| `transitional_forest_firm_ground` | 118 |
+| `established_forest_wetland` | 121–127 |
+| `transitional_forest_wetland` | 128 |
+| `open_wetland` | 200, 211–218, 221–228 |
+| `open_nonvegetated` | 411 |
+| `open_vegetated` | 4211–4213, 4221–4223, 4231–4233 |
+
+The analytical roles are derived from those groups and can overlap:
+
+- `primary_candidate`: exactly `arable` / code 3.
+- `habitat_context_proxy`: established forest on firm ground, established
+  forest on wetland, open wetland, and open vegetated land. This is a
+  structural land-cover proxy, not a claim of semi-natural habitat, high
+  quality, or biodiversity. In particular, NMD forest classes do not establish
+  forest naturalness or management intensity.
+- `wetland_context`: established forest on wetland, transitional forest on
+  wetland, and open wetland. Class 128 is wetland context, but not established
+  habitat context.
+- `inland_water_context`: exactly class 61. Sea / marine class 62 is outside
+  the MVP riparian role and current model.
+- `artificial_constraint`: classes 51–53. Peat extraction remains separate.
+- `transitional_forest`: classes 118 and 128 as a factual supporting role only;
+  neither is assigned a favorable or unfavorable score.
+- `terrestrial_land`: all valid land-cover groups except no-data, inland water,
+  and sea. Artificial surfaces remain terrestrial land even though they are
+  constraints.
+
+No mutually exclusive analysis-class raster is created. Future operations can
+derive the required masks directly from the compact categorical raster. Exact
+spatial indicators, neighborhood definitions, connectivity, normalization,
+weights, and scoring remain deferred.
 
 The study-area identifiers are county/län code **12** and NUTS 3 code
 **SE224**. The reproducible boundary source is SCB DeSO 2025: select
@@ -108,14 +173,15 @@ detailed formulas prematurely.
 
 - The study area is Skåne län; its MVP boundary is derived from SCB DeSO 2025
   polygons selected by `lanskod=12` and dissolved.
-- NMD2023 Basskikt v2.1 is the selected land-cover backbone, but complete
-  Skåne coverage remains an ingestion-time acceptance check because the v2.x
-  product has been released progressively.
+- NMD2023 Basskikt v2.1 is the selected land-cover backbone; its complete
+  terrestrial Skåne coverage gate passed during Step 4.
 - A nominal 500 m hexagonal unit is a planning assumption, not a final
   immutable implementation detail.
-- Candidate-land filtering, feature-distance definitions, habitat/network
-  interpretations, and treatment of missing data require source-specific
-  validation.
+- Candidate pixels are currently exactly NMD class 3 arable land. The
+  habitat-context proxy, wetland context, and constraint roles are analytical
+  land-cover masks, not ecological-quality or feasibility measurements.
+- Feature-distance definitions, habitat/network indicators, treatment of
+  missing data, normalization, weights, and scoring require later validation.
 - NMD inland-water and wetland classes are the MVP riparian source. Narrow
   streams may be underrepresented; a separate hydrographic vector source is
   deferred because available alternatives add access/legal complexity or are
