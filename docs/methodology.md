@@ -421,6 +421,72 @@ neighbors at the county edge are retained as an MVP limitation and are not
 imputed or used to exclude candidates. The component is **IMPLEMENTED FOR
 MVP**.
 
+## RAW Riparian Opportunity indicators (Step 13)
+
+Riparian Opportunity is a raw hydrological/riparian landscape-context
+component for eligible agricultural candidate hexagons. It asks approximately:
+
+> How strongly is this agricultural restoration candidate associated with
+> inland-water and wetland context at the focal and surrounding landscape
+> scales?
+
+The source is NMD2023 v2.1 only. The approved Step 5 semantic contract is
+reused without modification. `wetland_context` consists of established forest
+wetland classes 121–127, transitional forest wetland class 128, and open
+wetland classes 200, 211–218, and 221–228. `inland_water_context` is exactly
+class 61. The hydrologic union is:
+
+```text
+hydrologic_context_pixels = wetland_context_pixels + inland_water_pixels
+```
+
+These factual roles are mutually exclusive, so wetland and inland water are
+not double-counted. Sea / class 62, code 0/no-data, artificial surfaces,
+general firm-ground forest, and arable land itself are not added as hydrologic
+context.
+
+The denominator is the non-marine mapped landscape:
+
+```text
+nonmarine_context_pixels = terrestrial_land_pixels + inland_water_pixels
+```
+
+Wetland pixels are already part of terrestrial land; inland water is not. Sea
+and no-data are excluded. Consequently, an inland-water-only NMD grid position
+has a raw hydrologic fraction of 1, while a sea-only position contributes
+neither numerator nor denominator.
+
+The NMD raster is aggregated directly using the deterministic Step 6 pixel
+center-to-grid assignment convention, reusing the existing pure
+`pixel_centers_to_grid_indices` helper. This is component-specific contextual
+processing; the durable Step 6 `analysis_units.gpkg` is not changed and
+water-only cells are not reintroduced into candidate eligibility. The compact
+aggregation includes terrestrial, mixed land/water, inland-water-only, and
+sea-only valid positions needed for context.
+
+Three raw scales are audited:
+
+- the focal candidate hex;
+- the six adjacent positions with hex distance exactly 1; and
+- the 18 surrounding positions with `1 <= hex distance <= 2`.
+
+The focal cell is excluded from the adjacent and local scales. Surrounding
+scales sum raw pixel counts across their available positions first and then
+divide, rather than averaging per-cell fractions. Missing positions and
+sea-only positions contribute no numerator or denominator. A zero denominator
+is retained as missing/NaN and reported in provenance. Diagnostic wetland and
+inland-water fractions and factual presence booleans are retained for audit;
+they are not separate scores.
+
+No final riparian scale, normalization, 0–100 score, weighting, or overall
+restoration score has been selected. Riparian Opportunity does not measure
+flood risk, water quality, stream order, catchment function, groundwater,
+hydrological connectivity, actual riparian-buffer suitability, or feasibility.
+NMD's representation of narrow streams may underrepresent them. No separate
+stream vector network is used, and NMD inland water/wetland is adequate for
+this contained MVP context audit but is not equivalent to a detailed
+hydrographic dataset.
+
 ## Planned analytical components
 
 Each candidate cell will retain five independently available component scores:
