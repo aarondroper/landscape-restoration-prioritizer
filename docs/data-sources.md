@@ -9,7 +9,7 @@ datasets are stored in this repository.
 | Role | Authority and exact product | MVP decision | Key access / reproducibility note |
 | --- | --- | --- | --- |
 | Study boundary | [SCB DeSO 2025](https://www.scb.se/vara-tjanster/oppna-data/oppna-geodata/demografiska-statistikomraden-deso/), WFS layer `stat:DeSO_2025` | **ADOPT** | Anonymous WFS; select `lanskod=12` and dissolve. Native/default CRS EPSG:3006; SCB open data is CC0. |
-| Land-cover backbone | [Naturvårdsverket NMD2023 Basskikt v2.1](https://www.naturvardsverket.se/verktyg-och-tjanster/kartor-och-karttjanster/nationella-marktackedata/ladda-ner-nationella-marktackedata/) | **ADOPT, subject to coverage gate** | Public national ZIP, 2.7 GB at verification; 10 m GeoTIFF, EPSG:3006, CC0. Skåne coverage was not geometrically verified from the large archive. |
+| Land-cover backbone | [Naturvårdsverket NMD2023 Basskikt v2.1](https://www.naturvardsverket.se/verktyg-och-tjanster/kartor-och-karttjanster/nationella-marktackedata/ladda-ner-nationella-marktackedata/) | **ADOPT — coverage gate passed** | Public national ZIP, 2,705,971,730 bytes at retrieval; 10 m GeoTIFF, EPSG:3006, CC0. Skåne terrestrial coverage was verified from the live archive and metadata layer. |
 | Protected areas | [Naturvårdsregistret `SkyddadeOmraden`](https://geodata.naturvardsverket.se/naturvardsregistret/wfs) plus [Natura 2000 `N2000`](https://geodata.naturvardsverket.se/n2000/wfs) | **ADOPT** | Anonymous WFS, polygon geometry, EPSG:3006. Filter the minimum defensible categories below; retain retrieval/update metadata. |
 
 The stack is intentionally three source families. NMD supplies broad habitat,
@@ -19,7 +19,7 @@ geometry or introduce disproportionate access and legal friction.
 
 ## Selected-source records
 
-### NMD2023 Basskikt v2.1 — adopt
+### NMD2023 Basskikt v2.1 — adopt; coverage gate passed
 
 - **Authority/product:** Naturvårdsverket, Nationella marktäckedata 2023,
   Basskikt version 2.1. The current product description is [NMD2023
@@ -30,9 +30,9 @@ geometry or introduce disproportionate access and legal friction.
 - **Coverage and time:** the v2.x product is produced progressively; the
   documentation exposes a current extent metadata layer named
   `NV_NMD2023_version_baskartering`. The reference imagery includes 2023
-  Sentinel-2 inputs, with other inputs dated in the product metadata. Do not
-  infer complete Skåne coverage from the national download alone: coverage
-  remains an ingestion-time acceptance check.
+  Sentinel-2 inputs, with other inputs dated in the product metadata. Step 4
+  explicitly checked the generated Skåne extent against the delivered raster
+  and this metadata layer.
 - **Raster and resolution:** 10 m raster; 54 thematic classes across four
   hierarchical levels; minimum mapping unit documented as 0.01 ha.
 - **CRS and format:** EPSG:3006; unsigned 16-bit GeoTIFF with PackBits
@@ -40,8 +40,43 @@ geometry or introduce disproportionate access and legal friction.
   metadata/FileGDB material.
 - **Access:** [official download page](https://www.naturvardsverket.se/verktyg-och-tjanster/kartor-och-karttjanster/nationella-marktackedata/ladda-ner-nationella-marktackedata/)
   and [v2.x download directory](https://geodata.naturvardsverket.se/nedladdning/marktacke/NMD2023/Basskikt_v2_x/).
-  The verified delivery is a national ZIP rather than a regional/tile
-  service; local processing must therefore plan for a large archive.
+  The live v2.1 delivery used by Step 4 is
+  `https://geodata.naturvardsverket.se/nedladdning/marktacke/NMD2023/Basskikt_v2_x/NMD2023_basskikt_v2_1.zip`.
+  It is a national ZIP rather than a regional/tile service. At retrieval it
+  exposed `Content-Length: 2705971730`, `Last-Modified: Mon, 23 Mar 2026
+  14:10:23 GMT`, and byte ranges (`206`, `bytes 0-0/2705971730`).
+- **Observed delivery members:** the ZIP central directory contained 189
+  members. The required raster is
+  `NMD2023_basskikt_v2_1/NMD2023bas_v2_1.tif` (1,194,356,226 compressed /
+  10,852,673,468 uncompressed bytes, ZIP Deflate; the TIFF itself is PackBits
+  compressed). The preferred metadata member is
+  `NMD2023_basskikt_v2_1/NMD2023_metadata_v2_0.gdb/NMD2023_metadata_v2_0.gpkg`
+  (663,605,064 compressed / 2,701,787,136 uncompressed bytes, ZIP Deflate).
+  The supplied code/name table is the small adjacent `.tif.vat.dbf` member.
+  Duplicate FileGDB metadata members are not extracted.
+- **Integrity:** no publisher checksum file or checksum field was found in the
+  official v2.x directory or adjacent official search results. The local
+  cached ZIP is 2,705,971,730 bytes with locally computed SHA-256
+  `8326b6731a2a21d9181bc126ef20f3fc2ea7eb74ca287f122e3165e2b009c9bc`;
+  the download was CRC-checked before use.
+- **Implemented workflow:** `python -m restoration_prioritizer.nmd` streams
+  to an atomic `.part` file, resumes an interrupted download when the server
+  supports byte ranges, reuses a valid cache, extracts only the raster and
+  GeoPackage, and removes the expanded national interim files after a
+  successful run. The ignored processed output is a tiled DEFLATE GeoTIFF at
+  `data/processed/nmd/nmd2023_v2_1_skane.tif`; factual run metadata is in the
+  adjacent ignored provenance JSON.
+- **Coverage acceptance:** the exact metadata layer used was
+  `NV_NMD2023_version_baskartering`, a MultiPolygon in EPSG:3006 with fields
+  `OBJECTID`, `Version`, and geometry. Its observed values were `Endast v0.x`
+  and `v2.0 och v0.x`; Skåne intersects only the latter current-v2.x extent.
+  Using the supplied raster legend, code 0 is no-data and code 62 is
+  `Hav`/sea. The Skåne subset contained 11349.354 km² of terrestrial valid
+  NMD data, 5753.0955 km² of sea, and 3 no-data pixels; 0 terrestrial valid
+  pixels were outside current v2.x metadata coverage. NMD v2.1 is therefore
+  accepted as the Skåne MVP land-cover source. The mixed `v2.0 och v0.x`
+  metadata value and the bundled `v2_0` metadata filename are retained as
+  observed delivery discrepancies rather than silently renamed.
 - **License:** CC0 according to the product description.
 - **Update behavior:** v2.0 was dated 2025-05-09 and v2.1 2026-03-19 in the
   product change history. Version and retrieval date must be recorded.
@@ -203,6 +238,7 @@ statistical study extent. It may include territorial water and is not the
 terrestrial candidate-analysis mask; later NMD-based candidate-land logic will
 handle marine, inland-water, built, and other unsuitable areas.
 
-The exact geometry of the NMD v2.1 coverage layer was not fetched because it is
-inside a large national archive. Complete Skåne coverage is therefore an
-explicit unresolved acceptance check, not a claim made by this registry.
+The live NMD v2.1 archive and its coverage layer have now been fetched and
+checked by the Step 4 command. Complete terrestrial Skåne coverage passed the
+acceptance gate; marine pixels and the three code-0 no-data pixels were not
+treated as terrestrial coverage failures.

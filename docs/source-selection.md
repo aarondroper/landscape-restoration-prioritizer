@@ -19,16 +19,20 @@ reproduce.
 The current official product is NMD2023 Basskikt v2.1, not an unspecified
 NMD2023 family. Its product description documents 10 m raster data in
 EPSG:3006, 54 classes in four hierarchy levels, and CC0 reuse. The v2.1
-national archive was publicly reachable and its advertised size was about 2.7
-GB. The delivery is not a convenient regional tile service.
+national archive was publicly reachable and measured 2,705,971,730 bytes at
+retrieval. The delivery is not a convenient regional tile service.
 
 The product documentation says v2.x coverage is being produced progressively
-and identifies a coverage/extent metadata layer. The archive was not unpacked
-or downloaded: only HTTP headers, ZIP central-directory metadata, and small
-metadata material were inspected. Consequently, complete Skåne coverage is
-not yet verified at geometry level. Ingestion must first inspect the v2.1
-extent metadata and fail closed if any part of the adopted Skåne boundary is
-outside the released coverage.
+and identifies a coverage/extent metadata layer. Step 4 fetched the archive,
+read `NV_NMD2023_version_baskartering`, and checked it against the generated
+Skåne study extent and source raster. The metadata field is `Version`, with
+observed values `Endast v0.x` and `v2.0 och v0.x`; Skåne lies within the latter
+current-v2.x extent. After excluding the supplied code-0 no-data entry and
+code-62 sea from the terrestrial denominator, all 11349.354 km² of valid
+terrestrial pixels were covered and no terrestrial gap remained. The primary
+source is therefore accepted for the Skåne MVP. The live archive's v2.1
+raster name and bundled v2.0 metadata name are retained as a delivery
+discrepancy in provenance.
 
 The basskikt is sufficient for a first-pass classification of broad forest,
 open, agricultural, built/artificial, wetland, and inland-water context. Its

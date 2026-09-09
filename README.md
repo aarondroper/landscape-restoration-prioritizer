@@ -12,10 +12,11 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 3 implements the first reproducible data-ingestion slice: the SCB DeSO
-2025 administrative/statistical study extent for Skåne. The generated boundary
-is not yet the terrestrial candidate-analysis mask; candidate-land logic will
-later use NMD-based processing.
+Step 4 implements reproducible acquisition and validation of the official
+Naturvårdsverket NMD2023 Basskikt v2.1 delivery and creates a native 10 m
+Skåne-only land-cover raster. The generated boundary remains an
+administrative/statistical study extent; no restoration or habitat class
+semantics have been defined yet.
 
 ## Intended architecture
 
@@ -58,3 +59,20 @@ python -m restoration_prioritizer.study_area
 This uses the SCB WFS server-side filter `lanskod='12'`, saves the exact
 filtered response under `data/raw/scb/`, and writes the dissolved one-feature
 GeoPackage and provenance manifest under `data/processed/`.
+
+## Generate the NMD2023 Skåne raster
+
+With the project environment active, run:
+
+```bash
+python -m restoration_prioritizer.nmd
+```
+
+The first run downloads and CRC-checks the official NMD2023 v2.1 ZIP (about
+2.5 GiB) under ignored raw data. It extracts only the required raster and
+coverage GeoPackage, verifies terrestrial Skåne coverage, writes the native
+10 m subset to `data/processed/nmd/nmd2023_v2_1_skane.tif`, records factual
+provenance, and removes the expanded national interim files after success.
+Reruns reuse a valid cached archive and regenerate the downstream artifact.
+The command fails closed if valid terrestrial pixels fall outside current
+v2.x coverage metadata.

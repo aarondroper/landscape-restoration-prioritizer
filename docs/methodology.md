@@ -29,6 +29,24 @@ the primary land-cover backbone does not require an initial CRS conversion.
 Source-specific CRS conversion, raster resampling, and precision decisions
 will be documented during ingestion validation.
 
+Step 4 validated the live NMD2023 Basskikt v2.1 delivery at the source
+contract: one EPSG:3006, 10 m, unsigned-16 raster band with PackBits TIFF
+compression. The source raster declares an all-valid GDAL mask; the supplied
+VAT legend identifies code 0 as the no-data entry and code 62 as `Hav`/sea.
+For the coverage gate, code 0 and sea pixels are excluded from the terrestrial
+NMD data footprint, while the output raster preserves the original sea code.
+
+The coverage metadata layer `NV_NMD2023_version_baskartering` was read from the
+delivered GeoPackage. Its `Version` values were `Endast v0.x` and `v2.0 och
+v0.x`; Skåne intersects the latter current-v2.x extent. Against the generated
+SCB `study_area` artifact, the check found 11349.354 km² of terrestrial valid
+NMD data and no uncovered terrestrial pixels. It found 5753.0955 km² of sea
+and three code-0 no-data pixels inside the administrative/statistical extent;
+these are not treated as missing terrestrial NMD coverage. The NMD v2.1
+delivery is accepted as the primary Skåne raster source. These are acquisition
+and coverage facts only; no NMD class is assigned a restoration or habitat
+meaning here.
+
 The study-area identifiers are county/län code **12** and NUTS 3 code
 **SE224**. The reproducible boundary source is SCB DeSO 2025: select
 `lanskod=12` from the anonymous WFS and dissolve the returned polygons.
