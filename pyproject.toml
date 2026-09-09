@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "landscape-restoration-prioritizer"
+version = "0.1.0"
+description = "A regional habitat-restoration screening tool for Skåne län, Sweden."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "geopandas>=1.0",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "pyproj>=3.6",
+    "rasterio>=1.3",
+    "shapely>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

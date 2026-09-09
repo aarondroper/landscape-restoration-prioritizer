@@ -1,0 +1,44 @@
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.build/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local configuration
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Large or generated geospatial artifacts
+*.fgb
+*.geojson
+*.gpkg
+*.mbtiles
+*.parquet
+*.pmtiles
+*.shp
+*.tif
+*.tiff
+
+# Project data directories are intentionally kept out of Git.
+data/raw/*
+data/interim/*
+data/processed/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
