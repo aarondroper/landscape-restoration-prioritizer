@@ -12,11 +12,9 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Ecological Network Context is implemented for the MVP using the finalized
-configuration-normalized input. RAW Riparian Opportunity indicators are under
-audit at focal, adjacent, local, and near-candidate scales; no riparian scale
-or score has been selected. The remaining prioritization components and
-overall score remain deferred.
+Habitat Context, Ecological Network Context, and Riparian Opportunity are
+implemented for the MVP using their finalized component definitions. The
+remaining prioritization components and overall score remain deferred.
 
 ## Intended architecture
 
@@ -192,6 +190,23 @@ including inland-water-only grid positions omitted from the terrestrial Step 6
 analysis-unit artifact. It writes the focal, adjacent, local, and
 near-candidate raw indicator table to
 `data/processed/indicators/riparian_opportunity.csv` and its audit/provenance
-manifest to the corresponding `.provenance.json` file. No riparian score or
-final scale is selected. The near-candidate field is evaluated as the raw
-`max(focal, adjacent)` signal; it is not a score or normalization.
+manifest to the corresponding `.provenance.json` file. The near-candidate
+field is evaluated as the raw `max(focal, adjacent)` signal; it is not a score
+or normalization. The focal, adjacent, near, and local raw fields remain
+available for audit and future explanation.
+
+## Generate the Riparian Opportunity component score
+
+With the raw Riparian Opportunity, candidate, Habitat Context, and Ecological
+Network Context artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.riparian_opportunity_score
+```
+
+This selects `riparian_focal_fraction` as the sole scoring input. A zero raw
+value remains score 0; positive candidates receive
+`100 * average_positive_rank / positive_candidate_count`, with average ranks
+for positive ties. It writes the component table and its component-specific
+audit/provenance manifest under `data/processed/components/`. Adjacent, near,
+and local raw indicators remain diagnostic and do not contribute to the score.

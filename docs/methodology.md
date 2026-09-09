@@ -421,7 +421,7 @@ neighbors at the county edge are retained as an MVP limitation and are not
 imputed or used to exclude candidates. The component is **IMPLEMENTED FOR
 MVP**.
 
-## RAW Riparian Opportunity indicators (Steps 13–14)
+## Riparian Opportunity (Steps 13–15)
 
 Riparian Opportunity is a raw hydrological/riparian landscape-context
 component for eligible agricultural candidate hexagons. It asks approximately:
@@ -464,10 +464,11 @@ water-only cells are not reintroduced into candidate eligibility. The compact
 aggregation includes terrestrial, mixed land/water, inland-water-only, and
 sea-only valid positions needed for context.
 
-Three raw scales are audited:
+Four raw scales are audited:
 
 - the focal candidate hex;
 - the six adjacent positions with hex distance exactly 1; and
+- the near signal, defined as `max(focal, adjacent)`; and
 - the 18 surrounding positions with `1 <= hex distance <= 2`.
 
 The focal cell is excluded from the adjacent and local scales. Surrounding
@@ -506,15 +507,73 @@ focal-only hex-boundary sensitivity and whether it becomes excessively
 redundant with finalized Habitat Context. Focal, adjacent, local, and near are
 all retained as raw/provenance indicators.
 
-The Step 14 audit does not select a final riparian input. No final riparian
-scale, normalization, 0–100 score, weighting, or overall restoration score has
-been selected. Riparian Opportunity does not measure
+### Final MVP input and score
+
+Step 15 finalizes `riparian_focal_fraction` as the sole Riparian Opportunity
+scoring input. It is the fraction of the candidate hex's mapped non-marine
+landscape consisting of NMD wetland context or inland water. Wetland context
+uses the Step 5 classes and inland water is class 61. The denominator is
+terrestrial land plus inland water; sea and no-data are excluded.
+
+The selected focal scale directly represents hydrologic context inside the
+candidate analysis unit and was the most distinct serious scale from finalized
+Habitat Context. Step 14 found approximate Habitat Context Spearman
+correlations of 0.475 for focal, 0.675 for adjacent, 0.636 for near, and 0.725
+for local. Focal had zero raw context for approximately 26.5% of candidates.
+The near diagnostic rescued only 266 candidates (approximately 1.0%) under the
+clear `focal <= 1%` / `adjacent >= 10%` condition, while changing empirical
+ranks materially: median absolute change was approximately 12.5 percentile
+points and approximately 20.4% moved at least 25 percentile points. The whole-
+population redundancy and rank reshuffling therefore outweighed the limited
+boundary-rescue benefit.
+
+The final score uses a zero-anchored positive-population empirical percentile.
+For `x_i = riparian_focal_fraction`:
+
+```text
+if x_i == 0:
+    riparian_opportunity_score = 0
+otherwise:
+    r_i = average ascending rank among observations where x > 0
+    N_pos = count of observations where x > 0
+    riparian_opportunity_score = 100 * r_i / N_pos
+```
+
+Average ranks give tied positive raw values identical scores. This is not
+`100 * (rank - 1) / (N_pos - 1)`: the smallest positive observation must remain
+strictly above zero so that some mapped focal hydrologic context is distinct
+from no mapped focal hydrologic context. The raw fraction is highly
+right-skewed, constrained by candidate-land composition, and reaches only
+about 0.66 in the current population. Positive-population percentile scoring
+preserves ordering, avoids arbitrary ecological thresholds, provides a usable
+common 0–100 decision-support scale, and avoids letting the observed raw
+maximum arbitrarily cap the component's effective influence. This is a
+population-relative scale, not absolute ecological quality.
+
+Adjacent, near, and local remain available as supporting raw diagnostics for
+transparency, selected-area explanation, and showing immediately surrounding
+hydrologic context in the eventual UI. They do not contribute to the final
+score. No external stream dataset, detailed stream/vector hydrology, near/focal
+weighting, or Habitat Context adjustment is used. NMD may underrepresent
+narrow streams, and county-edge context is retained as an accepted MVP
+limitation rather than imputed or corrected.
+
+A Riparian Opportunity score of 90 means approximately:
+
+> Among candidate units with some focal mapped hydrologic context, this
+> candidate ranks around the 90th percentile for focal wetland/inland-water
+> share.
+
+It does not mean 90% riparian quality, 90% hydrological benefit, or 90%
+restoration suitability. Riparian Opportunity does not measure
 flood risk, water quality, stream order, catchment function, groundwater,
 hydrological connectivity, actual riparian-buffer suitability, or feasibility.
 NMD's representation of narrow streams may underrepresent them. No separate
 stream vector network is used, and NMD inland water/wetland is adequate for
 this contained MVP context audit but is not equivalent to a detailed
 hydrographic dataset.
+
+The Riparian Opportunity component is **IMPLEMENTED FOR MVP**.
 
 ## Planned analytical components
 
