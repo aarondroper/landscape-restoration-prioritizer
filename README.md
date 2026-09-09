@@ -301,3 +301,19 @@ none of those fields contributes to the score. The component artifact and
 component-specific provenance are written under `data/processed/components/`.
 This is a relative mapped-land screening measure, not full implementation
 feasibility; a 500 m hex is an analytical unit, not a parcel.
+
+## Generate the equal-weight prioritization baseline
+
+With all five finalized component artifacts and the authoritative candidate
+population present, run:
+
+```bash
+python -m restoration_prioritizer.prioritization_model
+```
+
+This integrates the authoritative component scores with equal 20% weights,
+audits reconciliation, distributions, influence, ranking sensitivity,
+compensability, ecological/availability tradeoffs, and spatial coverage, then
+writes the narrow baseline table and detailed provenance under
+`data/processed/prioritization/`. It is a neutral reference baseline, not yet
+a finalized user-facing preset; no component is recalculated or re-normalized.

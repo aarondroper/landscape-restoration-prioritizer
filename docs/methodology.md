@@ -866,3 +866,47 @@ restoration suitability or permission. The four ecological components and this
 availability component remain individually reported. Their correlations and
 tradeoffs are audited descriptively, but no overall prioritization score,
 weights, presets, or classifications are defined in Step 20.
+
+## Overall model integration: Equal-weight baseline (Step 21)
+
+Step 21 integrates the five finalized MVP components without changing any
+component definition or transformation:
+
+1. Habitat Context (`habitat_context_score`)
+2. Ecological Network Context (`ecological_network_score`)
+3. Riparian Opportunity (`riparian_opportunity_score`)
+4. Protected-Area Reinforcement (`protected_area_reinforcement_score`)
+5. Restoration Land Availability (`restoration_land_availability_score`)
+
+The neutral **Equal-weight baseline** assigns exactly 20% to each component:
+
+```text
+balanced_score =
+    0.20 * habitat_context_score
+  + 0.20 * ecological_network_score
+  + 0.20 * riparian_opportunity_score
+  + 0.20 * protected_area_reinforcement_score
+  + 0.20 * restoration_land_availability_score
+```
+
+This is the raw weighted arithmetic mean. All five components follow the
+directional contract that higher score means a stronger contribution to
+restoration priority under that component's interpretation; Restoration Land
+Availability therefore treats more candidate hectares as higher score. No
+secondary normalization, re-ranking, clipping, standardization, percentile
+transformation, or z-scoring is applied to `balanced_score`. Because every
+input is bounded in `[0, 100]`, the baseline is also bounded in `[0, 100]`.
+
+Equal weighting is initially neutral and transparent, not empirically
+optimized. Weighted averaging is compensatory: strong performance on one
+component can offset weak performance on another. Four components are
+ecological/context dimensions and one is land availability, so equal
+per-component weights nominally allocate 80% of the total to ecological/context
+dimensions and 20% to land availability. This is intentional for the baseline
+and will be reviewed before defining any final preset. Connectivity-first and
+Riparian-restoration weights remain pending validation and are not defined in
+Step 21. The detailed real-data audit and provenance are written to
+`data/processed/prioritization/balanced_baseline.provenance.json`; the durable
+candidate table is
+`data/processed/prioritization/balanced_baseline.csv` and contains no geometry
+or raw indicators.
