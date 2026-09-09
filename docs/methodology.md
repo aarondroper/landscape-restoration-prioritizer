@@ -807,7 +807,62 @@ formula, normalization, weights, presets, or overall prioritization score.
 Step 19 reports area-versus-fraction redundancy, focal/adjacent/local
 artificial-scale redundancy, relationships with all four finalized component
 scores, ecological tradeoff diagnostics, boundary/coastal and terrestrial-
-fraction sensitivity, and descriptive examples. It does **not** select the
-final fifth-component formula. A 500 m hex remains an analytical unit rather
-than a cadastral parcel, and 10 m NMD arable classification does not imply
-ownership, willingness, suitability, or implementability.
+fraction sensitivity, and descriptive examples. A 500 m hex remains an
+analytical unit rather than a cadastral parcel, and 10 m NMD arable
+classification does not imply ownership, willingness, suitability, or
+implementability.
+
+## Restoration Land Availability component (Step 20)
+
+The fifth component is **implemented for the MVP** as **Restoration Land
+Availability**. The historical “Land-Restoration Feasibility” name is retained
+in the raw and component artifact paths for continuity, but its operational
+meaning is intentionally narrowed. It measures the **relative amount of mapped
+eligible arable land available within each 500 m analysis unit**. It does not
+estimate full implementation feasibility.
+
+The sole scoring input is `candidate_land_area_ha`, defined as the approved
+Step 7 `candidate_area_m2 / 10,000`. The candidate population already requires
+at least 5 ha and at least 25% terrestrial candidate fraction, so all retained
+observations are plausible screening candidates. Candidate fraction is not
+scored because Step 19 found it nearly redundant with candidate area; area has
+the direct interpretation of hectares available and avoids minor denominator
+sensitivity in coastal or partially terrestrial cells. Hectares remain in the
+component artifact beside the score.
+
+For candidate `i`, let `x_i = candidate_land_area_ha`, let `N` be the total
+eligible candidate count, and let `r_i` be the ascending average rank of `x_i`
+among all eligible candidates. The final score is:
+
+```text
+restoration_land_availability_score = 100 * (r_i - 1) / (N - 1)
+```
+
+Equal areas receive equal scores through average-rank tie handling. Empirical
+percentile scoring distinguishes relative standing without inventing a claim
+that, for example, 20 ha is exactly twice as feasible as 10 ha, and it creates
+the common 0–100 decision-support scale. A score of 90 means the unit contains
+more mapped eligible arable land than roughly 90% of the eligible candidate
+population. It does not mean 90% of the cell is restorable, 90% implementation
+feasibility, a 90% restoration probability, 90 hectares, or 90% landowner
+willingness. If the maximum area is tied, the exact average-rank formula can
+give that tied maximum a score slightly below 100; this is expected tie
+behavior, not a jitter or a hidden rescaling.
+
+Artificial burden is supporting diagnostic context only. `artificial_focal_fraction`,
+`artificial_adjacent_fraction`, and `artificial_local_fraction` are not added,
+subtracted, multiplied, thresholded, or otherwise used in the score. Candidate
+area already counts only NMD arable pixels, and NMD artificial classes 51–53
+are mutually exclusive with those candidate pixels. Penalizing candidate
+hectares again would partly double-count the mapped land-availability
+limitation; surrounding burden is also less directly connected to whether the
+mapped arable hectares themselves are available. Focal artificial burden may
+later be shown as a UI caution/context field.
+
+This component has no socioeconomic, ownership, cadastral, legal, acquisition,
+cost, agricultural-productivity, soil-suitability, drainage-removal, or subsidy
+data. Candidate hectares are a mapped land-availability proxy, not a claim of
+restoration suitability or permission. The four ecological components and this
+availability component remain individually reported. Their correlations and
+tradeoffs are audited descriptively, but no overall prioritization score,
+weights, presets, or classifications are defined in Step 20.

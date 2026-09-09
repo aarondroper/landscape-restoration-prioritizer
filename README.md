@@ -12,12 +12,10 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Habitat Context, Ecological Network Context, Riparian Opportunity, and
-Protected-Area Reinforcement are implemented for the MVP using their finalized
-component definitions. Raw mapped land-restoration feasibility / land-availability
-indicators are implemented for audit; no fifth-component formula or score has
-been selected. Component weights, presets, and the overall score remain
-deferred.
+Habitat Context, Ecological Network Context, Riparian Opportunity,
+Protected-Area Reinforcement, and Restoration Land Availability are implemented
+for the MVP using their finalized component definitions. Component weights,
+presets, and the overall score remain deferred.
 
 ## Intended architecture
 
@@ -281,4 +279,25 @@ manifest in the corresponding `.provenance.json` file. It reuses the Step 5
 NMD roles (`primary_candidate` = class 3 and `artificial_constraint` = classes
 51–53) and the existing Step 6/7 counts. This is a mapped land-availability /
 development-context proxy, not cadastral or socioeconomic feasibility. No raw
-indicators are combined, normalized, weighted, or scored.
+indicators are combined, normalized, weighted, or scored by this raw-indicator
+step.
+
+## Generate the Restoration Land Availability component
+
+With the Step 19 raw indicator artifact, the candidate population, and the four
+finalized ecological component artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.land_restoration_feasibility_score
+```
+
+This finalizes the historical “Land-Restoration Feasibility” component under
+the narrower user-facing interpretation **Restoration Land Availability**.
+It ranks `candidate_land_area_ha` across all eligible candidates using the
+empirical average-rank formula
+`100 * (rank - 1) / (N - 1)`. Candidate fraction is retained only in the
+audit, and focal/adjacent/local artificial burden remains diagnostic context;
+none of those fields contributes to the score. The component artifact and
+component-specific provenance are written under `data/processed/components/`.
+This is a relative mapped-land screening measure, not full implementation
+feasibility; a 500 m hex is an analytical unit, not a parcel.
