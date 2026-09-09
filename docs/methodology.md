@@ -32,6 +32,11 @@ will be documented during ingestion validation.
 The study-area identifiers are county/län code **12** and NUTS 3 code
 **SE224**. The reproducible boundary source is SCB DeSO 2025: select
 `lanskod=12` from the anonymous WFS and dissolve the returned polygons.
+The resulting artifact is an administrative/statistical study extent used to
+locate Skåne, not a terrestrial land boundary: the DeSO 2025 revision is
+complete to the territorial-water boundary and may include marine territory.
+Marine areas, inland water, built land, and other unsuitable areas remain for
+later NMD-based candidate-land logic and are not removed here.
 
 ## Planned analytical components
 

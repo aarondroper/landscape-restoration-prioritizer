@@ -187,6 +187,22 @@ environmental data:
   between open catchment WFS data and view-only Lantmäteriet-derived stream/
   lake geometries.
 
+## Implemented study-area ingestion
+
+The Step 3 source-specific command is documented in the README and can be run
+with `python -m restoration_prioritizer.study_area`. It sends a WFS 2.0.0
+`GetFeature` request to the SCB endpoint with `typeNames=stat:DeSO_2025`,
+`srsName=EPSG:3006`, `outputFormat=application/json`, and the server-side
+`CQL_FILTER=lanskod='12'`. The live service returned 819 matching features at
+implementation time. The exact response is retained under ignored raw data;
+the processed GeoPackage contains one dissolved feature and a concise
+provenance manifest.
+
+The dissolved DeSO geometry is deliberately retained as the administrative /
+statistical study extent. It may include territorial water and is not the
+terrestrial candidate-analysis mask; later NMD-based candidate-land logic will
+handle marine, inland-water, built, and other unsuitable areas.
+
 The exact geometry of the NMD v2.1 coverage layer was not fetched because it is
 inside a large national archive. Complete Skåne coverage is therefore an
 explicit unresolved acceptance check, not a claim made by this registry.

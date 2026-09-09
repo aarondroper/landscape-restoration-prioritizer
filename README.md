@@ -12,9 +12,10 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 2 validates an initial authoritative source stack and records source
-selection decisions. No analytical outputs have been produced and no
-environmental datasets have been downloaded.
+Step 3 implements the first reproducible data-ingestion slice: the SCB DeSO
+2025 administrative/statistical study extent for Skåne. The generated boundary
+is not yet the terrestrial candidate-analysis mask; candidate-land logic will
+later use NMD-based processing.
 
 ## Intended architecture
 
@@ -45,3 +46,15 @@ Raw, interim, processed, and generated geospatial data are excluded from Git;
 see [`docs/methodology.md`](docs/methodology.md) and
 [`docs/data-sources.md`](docs/data-sources.md) for the current contract and
 source-planning status.
+
+## Generate the study-area artifact
+
+With the project environment active, run:
+
+```bash
+python -m restoration_prioritizer.study_area
+```
+
+This uses the SCB WFS server-side filter `lanskod='12'`, saves the exact
+filtered response under `data/raw/scb/`, and writes the dissolved one-feature
+GeoPackage and provenance manifest under `data/processed/`.
