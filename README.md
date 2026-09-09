@@ -12,9 +12,9 @@ recommendation or a scientific probability model.
 
 ## Status
 
-Step 8 implements raw Habitat Context indicators for the deterministic MVP
-candidate population. Normalization, component scoring, and the other
-prioritization components remain deferred.
+Step 9 implements the MVP Habitat Context component score for the deterministic
+candidate population. The other prioritization components and overall score
+remain deferred.
 
 ## Intended architecture
 
@@ -132,3 +132,16 @@ provenance/audit report to
 `data/processed/indicators/habitat_context.provenance.json`. The immediate and
 local indicators are raw terrestrial-pixel fractions; they are not normalized
 or scored.
+
+## Generate the Habitat Context component score
+
+With the Step 8 raw indicator and candidate artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.habitat_context_score
+```
+
+This ranks `habitat_context_local_fraction` empirically within the eligible
+candidate population and writes the ignored component table and audit
+provenance under `data/processed/components/`. The first-ring indicator is
+retained for diagnostics only.

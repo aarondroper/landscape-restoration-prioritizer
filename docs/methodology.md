@@ -206,6 +206,51 @@ across the Halland or Blekinge county boundary is invisible. Step 8 measures
 that potential study-boundary truncation with a diagnostic edge zone but does
 not exclude or alter edge candidates and does not add cross-border data.
 
+## Habitat Context component score (Step 9)
+
+The finalized MVP Habitat Context component uses the two-ring
+`habitat_context_local_fraction` as its **sole scoring input**. It is the raw
+terrestrial habitat-context proxy fraction across the 18 surrounding grid
+positions within two hex steps. The one-ring
+`habitat_context_adjacent_fraction` remains available in the Step 8 raw
+artifact as a supporting diagnostic only. The two raw indicators were highly
+correlated (approximately 0.95 Spearman correlation), so using both would
+unnecessarily double-count the same habitat-context signal. The broader local
+metric is retained as the transparent MVP landscape-context convention; this
+does not claim that its scale is ecologically optimal. Focal-cell habitat
+fraction is not added separately.
+
+For the eligible candidate population, the component uses empirical percentile
+ranking with higher raw context treated as better. For `N` valid observations,
+the ascending average rank is transformed as:
+
+```text
+habitat_context_score = 100 * (average rank - 1) / (N - 1)
+```
+
+The lowest observation receives 0 and the highest receives 100. Equal raw
+values receive their average rank and therefore the same continuous 0–100
+score. This relative transformation puts a component with its own units and
+distribution on a transparent decision-support scale, is robust to extreme
+raw values, preserves ordering, and avoids unsupported ecological thresholds.
+It is a choice for this component; it does not require every future component
+to use percentile scoring.
+
+A score such as 90 means approximately that the candidate ranks around the
+90th percentile for the local surrounding habitat-context proxy among eligible
+candidates. It does not mean 90% habitat quality, restoration suitability,
+probability of success, or habitat coverage. The raw local fraction remains the
+direct measure of surrounding habitat-cover proportion.
+
+The output is one row per eligible candidate in deterministic `hex_id` order
+with `hex_id`, `habitat_context_local_fraction`, `habitat_context_score`, and
+the transparent `boundary_edge_flag`. Candidates within the approximately
+1 km study-boundary edge zone remain in the ranking. County-boundary
+truncation affects approximately 0.31% of candidates and is accepted as an
+MVP limitation: no cross-county context correction or imputation is applied.
+The edge flag is not used to exclude or penalize candidates. No weights or
+overall restoration-opportunity score are defined here.
+
 The study-area identifiers are county/län code **12** and NUTS 3 code
 **SE224**. The reproducible boundary source is SCB DeSO 2025: select
 `lanskod=12` from the anonymous WFS and dissolve the returned polygons.
