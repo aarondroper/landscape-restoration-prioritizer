@@ -910,3 +910,49 @@ Step 21. The detailed real-data audit and provenance are written to
 candidate table is
 `data/processed/prioritization/balanced_baseline.csv` and contains no geometry
 or raw indicators.
+
+## Controlled preset sensitivity study (Step 22)
+
+Step 22 retains the Step 21 equal-weight model as the sole **Balanced**
+reference candidate:
+
+```text
+Habitat       0.20
+Network       0.20
+Riparian      0.20
+Protection    0.20
+Availability  0.20
+```
+
+It tests exactly three interpretable **Connectivity First** scenario vectors:
+
+| Scenario | Habitat | Network | Riparian | Protection | Availability |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Connectivity Mild | 0.20 | 0.25 | 0.15 | 0.25 | 0.15 |
+| Connectivity Medium | 0.20 | 0.30 | 0.10 | 0.25 | 0.15 |
+| Connectivity Strong | 0.20 | 0.35 | 0.10 | 0.25 | 0.10 |
+
+It also tests exactly three **Riparian Restoration** scenario vectors:
+
+| Scenario | Habitat | Network | Riparian | Protection | Availability |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Riparian Mild | 0.20 | 0.15 | 0.30 | 0.15 | 0.20 |
+| Riparian Medium | 0.20 | 0.10 | 0.35 | 0.15 | 0.20 |
+| Riparian Strong | 0.15 | 0.10 | 0.40 | 0.15 | 0.20 |
+
+For every scenario, the result is the direct weighted arithmetic mean of the
+five finalized 0–100 component scores. No component is recalculated, inverted,
+percentile-ranked, normalized after weighting, gated, or optimized against an
+outcome. The six vectors are policy/scenario choices, not calibrated
+ecological truth. Weighted averaging remains compensatory, so one component
+can offset another. Step 22 is an analytical sensitivity study only; no final
+thematic weights are selected or persisted as user-facing presets.
+
+The ignored analytical artifacts are
+`data/processed/prioritization/preset_sensitivity.csv` and
+`data/processed/prioritization/preset_sensitivity.provenance.json`. The
+command is:
+
+```bash
+python -m restoration_prioritizer.preset_sensitivity
+```

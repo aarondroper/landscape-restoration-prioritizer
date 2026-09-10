@@ -14,8 +14,9 @@ recommendation or a scientific probability model.
 
 Habitat Context, Ecological Network Context, Riparian Opportunity,
 Protected-Area Reinforcement, and Restoration Land Availability are implemented
-for the MVP using their finalized component definitions. Component weights,
-presets, and the overall score remain deferred.
+for the MVP using their finalized component definitions. The equal-weight
+prioritization baseline is approved as the Balanced reference; thematic preset
+weights remain under Step 22 sensitivity review.
 
 ## Intended architecture
 
@@ -317,3 +318,18 @@ compensability, ecological/availability tradeoffs, and spatial coverage, then
 writes the narrow baseline table and detailed provenance under
 `data/processed/prioritization/`. It is a neutral reference baseline, not yet
 a finalized user-facing preset; no component is recalculated or re-normalized.
+
+## Run the controlled preset sensitivity study
+
+With the approved equal-weight baseline and all five finalized component
+artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.preset_sensitivity
+```
+
+This evaluates exactly three Connectivity First and three Riparian Restoration
+scenario vectors against the `balanced_reference`, writes the analytical
+`preset_sensitivity.csv` table and its provenance JSON, and reports ranking,
+tail-overlap, component-tradeoff, availability, weakness, churn, mover, and
+spatial diagnostics. It does not search weights or finalize a thematic preset.

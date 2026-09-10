@@ -14,7 +14,7 @@ import time
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import geopandas as gpd
 import numpy as np
@@ -293,16 +293,50 @@ def join_component_scores(
     return joined
 
 
-def weighted_mean(frame: pd.DataFrame, weights: OrderedDict[str, float] = WEIGHTS) -> pd.Series:
+def validate_weights(
+    weights: Mapping[str, float], *, require_positive: bool = True
+) -> OrderedDict[str, float]:
+    """Validate a complete five-component weight vector."""
+
+    if set(weights) != set(SCORE_FIELDS):
+        missing = sorted(set(SCORE_FIELDS).difference(weights))
+        extra = sorted(set(weights).difference(SCORE_FIELDS))
+        raise PrioritizationModelError(
+            f"Weights must contain exactly the five score fields; missing={missing}, extra={extra}"
+        )
+    normalized: OrderedDict[str, float] = OrderedDict()
+    for field in SCORE_FIELDS:
+        try:
+            value = float(weights[field])
+        except (TypeError, ValueError) as error:
+            raise PrioritizationModelError(f"Weight for {field} must be numeric") from error
+        if not math.isfinite(value):
+            raise PrioritizationModelError(f"Weight for {field} must be finite")
+        if value < 0:
+            raise PrioritizationModelError(f"Weight for {field} must be non-negative")
+        if require_positive and value <= 0:
+            raise PrioritizationModelError(f"Weight for {field} must be greater than zero")
+        normalized[field] = value
+    weight_sum = math.fsum(normalized.values())
+    if not math.isclose(weight_sum, 1.0, rel_tol=0.0, abs_tol=STRICT_TOLERANCE):
+        raise PrioritizationModelError(f"Weights must sum to 1.0; got {weight_sum!r}")
+    return normalized
+
+
+def weighted_mean(frame: pd.DataFrame, weights: Mapping[str, float] = WEIGHTS) -> pd.Series:
     """Compute the explicit weighted arithmetic mean used by the baseline."""
 
-    _require_columns(frame, weights.keys(), "Weighted-mean input")
-    weight_sum = math.fsum(float(value) for value in weights.values())
+    normalized_weights = validate_weights(weights)
+    _require_columns(frame, normalized_weights.keys(), "Weighted-mean input")
+    numeric = frame[list(normalized_weights)].apply(pd.to_numeric, errors="coerce")
+    if numeric.isna().any().any() or not np.isfinite(numeric.to_numpy(dtype=float)).all():
+        raise PrioritizationModelError("Weighted-mean input contains non-finite component scores")
+    weight_sum = math.fsum(normalized_weights.values())
     if not math.isclose(weight_sum, 1.0, rel_tol=0.0, abs_tol=STRICT_TOLERANCE):
         raise PrioritizationModelError(f"Weights must sum to 1.0; got {weight_sum!r}")
     result = pd.Series(0.0, index=frame.index, dtype=float)
-    for field, weight in weights.items():
-        result = result + float(weight) * pd.to_numeric(frame[field], errors="raise")
+    for field, weight in normalized_weights.items():
+        result = result + weight * numeric[field]
     return result
 
 
