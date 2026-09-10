@@ -9,14 +9,26 @@ import {
   type MapSourceDataEvent,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { CandidateProperties, DeliveryMetadata } from "../data/types";
+import { parseCandidateProperties } from "../data/candidateProperties";
+import { PRESET_SCORE_FIELDS } from "../data/types";
+import type { CandidateProperties, DeliveryMetadata, PresetId } from "../data/types";
 import {
+  candidateBoundaryLayer,
   candidateFillLayer,
   candidateHoverOutlineLayer,
+  candidateSelectedFillLayer,
+  candidateSelectedHaloLayer,
+  candidateSelectedOutlineLayer,
+  getCandidateSelectedFilter,
+  getCandidateFillPaint,
 } from "./candidateLayers";
 import {
+  CANDIDATE_BOUNDARY_LAYER_ID,
   CANDIDATE_DATA_URL,
   CANDIDATE_FILL_LAYER_ID,
+  CANDIDATE_SELECTED_FILL_LAYER_ID,
+  CANDIDATE_SELECTED_HALO_LAYER_ID,
+  CANDIDATE_SELECTED_OUTLINE_LAYER_ID,
   CANDIDATE_SOURCE_ID,
   BASEMAP_STYLE_URL,
 } from "./mapConfig";
@@ -29,36 +41,11 @@ import {
 
 interface CandidateMapProps {
   metadata: DeliveryMetadata;
-}
-
-interface InspectionFeature {
-  id: string;
-  properties: Pick<
-    CandidateProperties,
-    | "hex_id"
-    | "balanced_score"
-    | "connectivity_first_score"
-    | "riparian_restoration_score"
-  >;
-}
-
-function formatScore(value: unknown): string {
-  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(3) : "—";
-}
-
-function inspectFeature(feature: MapGeoJSONFeature): InspectionFeature | undefined {
-  const properties = feature.properties as Partial<CandidateProperties>;
-  const id = String(feature.id ?? properties.hex_id ?? "");
-  if (!id) return undefined;
-  return {
-    id,
-    properties: {
-      hex_id: String(properties.hex_id ?? id),
-      balanced_score: Number(properties.balanced_score),
-      connectivity_first_score: Number(properties.connectivity_first_score),
-      riparian_restoration_score: Number(properties.riparian_restoration_score),
-    },
-  };
+  activePreset: PresetId;
+  selectedCandidateId?: string;
+  priorityVisible: boolean;
+  boundariesVisible: boolean;
+  onSelect: (candidate: CandidateProperties) => void;
 }
 
 function bboxFromMetadata(metadata: DeliveryMetadata): [[number, number], [number, number]] {
@@ -69,12 +56,32 @@ function bboxFromMetadata(metadata: DeliveryMetadata): [[number, number], [numbe
   ];
 }
 
-export function CandidateMap({ metadata }: CandidateMapProps) {
+export function CandidateMap({
+  metadata,
+  activePreset,
+  selectedCandidateId,
+  priorityVisible,
+  boundariesVisible,
+  onSelect,
+}: CandidateMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const hoveredIdRef = useRef<string | number | null>(null);
-  const [inspection, setInspection] = useState<InspectionFeature>();
+  const selectedHexIdRef = useRef(selectedCandidateId);
+  const activePresetRef = useRef(activePreset);
+  const priorityVisibleRef = useRef(priorityVisible);
+  const boundariesVisibleRef = useRef(boundariesVisible);
   const [mapError, setMapError] = useState<string>();
+
+  useEffect(() => {
+    selectedHexIdRef.current = selectedCandidateId;
+  }, [selectedCandidateId]);
+
+  useEffect(() => {
+    activePresetRef.current = activePreset;
+    priorityVisibleRef.current = priorityVisible;
+    boundariesVisibleRef.current = boundariesVisible;
+  }, [activePreset, boundariesVisible, priorityVisible]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -97,7 +104,7 @@ export function CandidateMap({ metadata }: CandidateMapProps) {
         pitch: 0,
       });
       mapRef.current = map;
-      map.addControl(new NavigationControl({ showCompass: false }), "top-right");
+      map.addControl(new NavigationControl({ showCompass: true }), "top-right");
       map.addControl(new ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
     } catch (error) {
       const message = error instanceof Error ? error.message : "MapLibre could not initialize";
@@ -107,10 +114,7 @@ export function CandidateMap({ metadata }: CandidateMapProps) {
 
     const clearHover = () => {
       if (hoveredIdRef.current !== null && map.getSource(CANDIDATE_SOURCE_ID)) {
-        map.setFeatureState(
-          { source: CANDIDATE_SOURCE_ID, id: hoveredIdRef.current },
-          { hover: false },
-        );
+        map.setFeatureState({ source: CANDIDATE_SOURCE_ID, id: hoveredIdRef.current }, { hover: false });
       }
       hoveredIdRef.current = null;
       map.getCanvas().style.cursor = "";
@@ -132,15 +136,35 @@ export function CandidateMap({ metadata }: CandidateMapProps) {
     const onLoad = () => {
       metrics.mapLoadAtMs = performance.now();
       metrics.mapInitToLoadMs = metrics.mapLoadAtMs - metrics.mapInitStartMs;
-      map.fitBounds(bboxFromMetadata(metadata), { padding: 36, duration: 0 });
+      map.fitBounds(bboxFromMetadata(metadata), { padding: 40, duration: 0 });
       metrics.candidateSourceRequestedAtMs = performance.now();
-      map.addSource(CANDIDATE_SOURCE_ID, {
-        type: "geojson",
-        data: CANDIDATE_DATA_URL,
-      });
+      map.addSource(CANDIDATE_SOURCE_ID, { type: "geojson", data: CANDIDATE_DATA_URL });
       metrics.candidateSourceAddedAtMs = performance.now();
       map.addLayer(candidateFillLayer);
+      map.addLayer(candidateBoundaryLayer);
       map.addLayer(candidateHoverOutlineLayer);
+      map.addLayer(candidateSelectedFillLayer);
+      map.addLayer(candidateSelectedHaloLayer);
+      map.addLayer(candidateSelectedOutlineLayer);
+      map.setPaintProperty(
+        CANDIDATE_FILL_LAYER_ID,
+        "fill-color",
+        getCandidateFillPaint(PRESET_SCORE_FIELDS[activePresetRef.current])!["fill-color"]!,
+      );
+      map.setLayoutProperty(
+        CANDIDATE_FILL_LAYER_ID,
+        "visibility",
+        priorityVisibleRef.current ? "visible" : "none",
+      );
+      map.setLayoutProperty(
+        CANDIDATE_BOUNDARY_LAYER_ID,
+        "visibility",
+        boundariesVisibleRef.current ? "visible" : "none",
+      );
+      const selectedFilter = getCandidateSelectedFilter(selectedHexIdRef.current);
+      map.setFilter(CANDIDATE_SELECTED_FILL_LAYER_ID, selectedFilter);
+      map.setFilter(CANDIDATE_SELECTED_HALO_LAYER_ID, selectedFilter);
+      map.setFilter(CANDIDATE_SELECTED_OUTLINE_LAYER_ID, selectedFilter);
     };
 
     const onSourceData = (event: MapSourceDataEvent) => {
@@ -149,8 +173,7 @@ export function CandidateMap({ metadata }: CandidateMapProps) {
       metrics.candidateSourceLoadedAtMs = performance.now();
       metrics.candidateSourceLoadMs =
         metrics.candidateSourceLoadedAtMs - (metrics.candidateSourceRequestedAtMs ?? metrics.mapInitStartMs);
-      metrics.resourceTiming =
-        toCandidateResourceTiming(event.resourceTiming?.[0]) ?? metrics.resourceTiming;
+      metrics.resourceTiming = toCandidateResourceTiming(event.resourceTiming?.[0]) ?? metrics.resourceTiming;
       map.once("idle", finishMetrics);
     };
 
@@ -159,10 +182,7 @@ export function CandidateMap({ metadata }: CandidateMapProps) {
       if (!feature || feature.id === undefined) return;
       map.getCanvas().style.cursor = "pointer";
       if (hoveredIdRef.current !== null && hoveredIdRef.current !== feature.id) {
-        map.setFeatureState(
-          { source: CANDIDATE_SOURCE_ID, id: hoveredIdRef.current },
-          { hover: false },
-        );
+        map.setFeatureState({ source: CANDIDATE_SOURCE_ID, id: hoveredIdRef.current }, { hover: false });
       }
       hoveredIdRef.current = feature.id;
       map.setFeatureState({ source: CANDIDATE_SOURCE_ID, id: feature.id }, { hover: true });
@@ -171,8 +191,8 @@ export function CandidateMap({ metadata }: CandidateMapProps) {
     const onClick = (event: MapLayerMouseEvent) => {
       const feature = event.features?.[0];
       if (!feature) return;
-      const inspected = inspectFeature(feature);
-      if (inspected) setInspection(inspected);
+      const candidate = parseCandidateProperties(feature as MapGeoJSONFeature);
+      if (candidate) onSelect(candidate);
     };
 
     const onMapError = (event: ErrorEvent) => {
@@ -198,36 +218,53 @@ export function CandidateMap({ metadata }: CandidateMapProps) {
       map.remove();
       mapRef.current = null;
     };
-  }, [metadata]);
+  }, [metadata, onSelect]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded() || !map.getLayer(CANDIDATE_FILL_LAYER_ID)) return;
+    map.setPaintProperty(
+      CANDIDATE_FILL_LAYER_ID,
+      "fill-color",
+      getCandidateFillPaint(PRESET_SCORE_FIELDS[activePreset])!["fill-color"]!,
+    );
+  }, [activePreset]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    if (map.getLayer(CANDIDATE_FILL_LAYER_ID)) {
+      map.setLayoutProperty(CANDIDATE_FILL_LAYER_ID, "visibility", priorityVisible ? "visible" : "none");
+    }
+    if (map.getLayer(CANDIDATE_BOUNDARY_LAYER_ID)) {
+      map.setLayoutProperty(CANDIDATE_BOUNDARY_LAYER_ID, "visibility", boundariesVisible ? "visible" : "none");
+    }
+  }, [priorityVisible, boundariesVisible]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded() || !map.getSource(CANDIDATE_SOURCE_ID)) return;
+    const selectedFilter = getCandidateSelectedFilter(selectedCandidateId);
+    for (const layerId of [
+      CANDIDATE_SELECTED_FILL_LAYER_ID,
+      CANDIDATE_SELECTED_HALO_LAYER_ID,
+      CANDIDATE_SELECTED_OUTLINE_LAYER_ID,
+    ]) {
+      if (map.getLayer(layerId)) map.setFilter(layerId, selectedFilter);
+    }
+  }, [selectedCandidateId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const resizeFrame = window.requestAnimationFrame(() => map.resize());
+    return () => window.cancelAnimationFrame(resizeFrame);
+  }, [selectedCandidateId]);
 
   return (
     <div className="map-region">
       <div ref={containerRef} className="map-container" aria-label="Candidate priority map" />
-      {mapError ? (
-        <div className="map-error" role="alert">
-          Map error: {mapError}
-        </div>
-      ) : null}
-      {inspection ? (
-        <aside className="inspection-panel" aria-label="Temporary candidate inspection">
-          <div className="inspection-heading">
-            <span>Technical inspection</span>
-            <button type="button" onClick={() => setInspection(undefined)} aria-label="Close inspection">
-              ×
-            </button>
-          </div>
-          <dl>
-            <dt>hex_id</dt>
-            <dd>{inspection.properties.hex_id}</dd>
-            <dt>Balanced score</dt>
-            <dd>{formatScore(inspection.properties.balanced_score)}</dd>
-            <dt>Connectivity First</dt>
-            <dd>{formatScore(inspection.properties.connectivity_first_score)}</dd>
-            <dt>Riparian Restoration</dt>
-            <dd>{formatScore(inspection.properties.riparian_restoration_score)}</dd>
-          </dl>
-        </aside>
-      ) : null}
+      {mapError ? <div className="map-error" role="alert">Map error: {mapError}</div> : null}
     </div>
   );
 }

@@ -1,8 +1,16 @@
-export const PRESET_SCORE_FIELDS = {
+export const PRESET_IDS = ["balanced", "connectivity_first", "riparian_restoration"] as const;
+export type PresetId = (typeof PRESET_IDS)[number];
+
+export type PresetScoreField =
+  | "balanced_score"
+  | "connectivity_first_score"
+  | "riparian_restoration_score";
+
+export const PRESET_SCORE_FIELDS: Record<PresetId, PresetScoreField> = {
   balanced: "balanced_score",
-  connectivityFirst: "connectivity_first_score",
-  riparianRestoration: "riparian_restoration_score",
-} as const;
+  connectivity_first: "connectivity_first_score",
+  riparian_restoration: "riparian_restoration_score",
+};
 
 export const COMPONENT_SCORE_FIELDS = {
   habitatContext: "habitat_context_score",
@@ -12,9 +20,15 @@ export const COMPONENT_SCORE_FIELDS = {
   restorationLandAvailability: "restoration_land_availability_score",
 } as const;
 
-export type PresetScoreField = (typeof PRESET_SCORE_FIELDS)[keyof typeof PRESET_SCORE_FIELDS];
 export type ComponentScoreField =
   (typeof COMPONENT_SCORE_FIELDS)[keyof typeof COMPONENT_SCORE_FIELDS];
+
+export interface PresetDefinition {
+  id: PresetId;
+  name: string;
+  description: string;
+  weights: Record<ComponentScoreField, number>;
+}
 
 export interface DeliveryMetadata {
   bbox_epsg_4326: {
@@ -42,4 +56,14 @@ export interface CandidateProperties {
   habitat_context_score: number;
   ecological_network_score: number;
   riparian_opportunity_score: number;
+  protected_area_reinforcement_score: number;
+  restoration_land_availability_score: number;
+  habitat_context_local_fraction: number;
+  opposing_balance_ratio: number;
+  riparian_focal_fraction: number;
+  nearest_protected_hex_steps: number;
+  protected_focal_fraction: number;
+  candidate_land_area_ha: number;
+  artificial_focal_fraction: number;
+  boundary_edge_flag: boolean;
 }

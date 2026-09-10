@@ -1,8 +1,13 @@
 # Frontend foundation
 
-Step 25 establishes the deliberately temporary technical frontend shell. It
-proves the current static delivery contract in a Vite/React/TypeScript app
-without beginning the final product interface design.
+Step 26 supersedes the temporary shell described below with the deliberate
+product interface documented in [Application UI](application-ui.md). The
+technical MapLibre, static-delivery, and performance notes remain useful
+implementation context.
+
+Step 25 established the technical frontend shell and proved the current static
+delivery contract in a Vite/React/TypeScript app. Step 26 now owns the product
+UX layer without changing that delivery contract.
 
 ## Stack and versions
 
@@ -30,9 +35,9 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 setWorkerUrl(workerUrl);
 ```
 
-The temporary no-key basemap is OpenFreeMap Positron:
+The provisional no-key basemap is OpenFreeMap Positron:
 `https://tiles.openfreemap.org/styles/positron`. The URL is isolated in
-`BASEMAP_STYLE_URL` and should be replaced during later visual design work.
+`BASEMAP_STYLE_URL`; it remains intentionally unchanged in Step 26.
 MapLibre's attribution control remains enabled, and the OpenFreeMap style
 provides its required attribution. The official OpenFreeMap quick-start was
 verified for the supported style endpoint before implementation.
@@ -73,17 +78,19 @@ one source per preset. Existing feature-level IDs are used as the source
 feature IDs, with no `generateId`.
 
 The initial view fits `bbox_epsg_4326` from the delivery metadata with modest
-padding. The temporary layer stack contains a balanced-score fill and a
-feature-state hover outline. The fill styling is isolated in
-`src/map/candidateLayers.ts` and uses a restrained interpolated ramp over
-`balanced_score`; the helper accepts all three preset score fields for later
-selector work without adding selector state now.
+padding. The layer stack contains an active-preset fill, subtle candidate
+boundaries, a feature-state hover outline, and a property-filtered selected
+outline. The fill styling is
+isolated in `src/map/candidateLayers.ts` and uses a restrained interpolated
+ramp over the selected precomputed score field. Preset switching changes the
+paint expression without replacing the source.
 
 Pointer movement uses MapLibre feature-state and clears only the prior
-hovered feature. A click opens a small temporary inspection surface containing
-`hex_id`, Balanced score, Connectivity First score, and Riparian Restoration
-score. Navigation and scale controls are enabled; pitch and bearing are zero,
-and there is no terrain.
+hovered feature. A click is handed to the React selected-candidate inspector;
+the selected outline is updated with a lightweight `hex_id` source-property
+filter. Navigation,
+compass, scale, and attribution controls are enabled; pitch and bearing are
+zero, and there is no terrain.
 
 Metadata failures and MapLibre initialization/source/worker/WebGL failures are
 shown as concise visible error states. MapLibre errors are categorized as
