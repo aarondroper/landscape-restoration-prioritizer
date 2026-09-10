@@ -349,3 +349,22 @@ generate frontend/map-delivery artifacts.
 
 The earlier `build_balanced_baseline()` function and
 `balanced_baseline.csv` artifact remain available for Step 21 reproducibility.
+
+## Generate the canonical web-delivery candidate dataset (Step 24)
+
+After the canonical Step 23 prioritization table exists, run:
+
+```bash
+python -m restoration_prioritizer.web_delivery
+```
+
+This joins the approved `candidate_units.gpkg`, final
+`prioritization_scores.csv`, and the narrow explanatory fields from the five
+finalized component artifacts into one deterministic WGS84 GeoJSON
+FeatureCollection at `data/processed/delivery/candidates.geojson`. The
+companion `candidates.metadata.json` records the field contract, rounding,
+preset definitions, reconciliation audit, and measured payload characteristics.
+All three final preset scores are delivered together for client-side preset
+switching. Step 24 does not build a frontend or introduce API, PostGIS,
+PMTiles, MBTiles, or vector-tiling infrastructure; the GeoJSON-versus-tiling
+decision remains subject to later browser/delivery review.
