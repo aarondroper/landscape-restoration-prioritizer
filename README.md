@@ -15,8 +15,8 @@ recommendation or a scientific probability model.
 Habitat Context, Ecological Network Context, Riparian Opportunity,
 Protected-Area Reinforcement, and Restoration Land Availability are implemented
 for the MVP using their finalized component definitions. The equal-weight
-prioritization baseline is approved as the Balanced reference; thematic preset
-weights remain under Step 22 sensitivity review.
+prioritization baseline and the Connectivity First and Riparian Restoration
+scenario presets are finalized for the MVP.
 
 ## Intended architecture
 
@@ -303,21 +303,14 @@ component-specific provenance are written under `data/processed/components/`.
 This is a relative mapped-land screening measure, not full implementation
 feasibility; a 500 m hex is an analytical unit, not a parcel.
 
-## Generate the equal-weight prioritization baseline
+## Preserve the equal-weight prioritization baseline
 
-With all five finalized component artifacts and the authoritative candidate
-population present, run:
-
-```bash
-python -m restoration_prioritizer.prioritization_model
-```
-
-This integrates the authoritative component scores with equal 20% weights,
-audits reconciliation, distributions, influence, ranking sensitivity,
-compensability, ecological/availability tradeoffs, and spatial coverage, then
-writes the narrow baseline table and detailed provenance under
-`data/processed/prioritization/`. It is a neutral reference baseline, not yet
-a finalized user-facing preset; no component is recalculated or re-normalized.
+The historical Step 21 `build_balanced_baseline()` function remains available
+for reproducibility and writes `balanced_baseline.csv` plus its provenance under
+`data/processed/prioritization/`. It integrates the authoritative component
+scores with equal 20% weights and does not recalculate or re-normalize any
+component. The canonical command below now writes the finalized three-preset
+MVP artifact.
 
 ## Run the controlled preset sensitivity study
 
@@ -333,3 +326,26 @@ scenario vectors against the `balanced_reference`, writes the analytical
 `preset_sensitivity.csv` table and its provenance JSON, and reports ranking,
 tail-overlap, component-tradeoff, availability, weakness, churn, mover, and
 spatial diagnostics. It does not search weights or finalize a thematic preset.
+
+## Generate the canonical MVP prioritization model (Step 23)
+
+With the five finalized component artifacts and approved Step 22 sensitivity
+artifacts present, run:
+
+```bash
+python -m restoration_prioritizer.prioritization_model
+```
+
+This writes the canonical candidate-level table to
+`data/processed/prioritization/prioritization_scores.csv`, detailed final-model
+provenance to
+`data/processed/prioritization/prioritization_scores.provenance.json`, and
+stable application-facing preset metadata to
+`data/processed/prioritization/presets.json`. The final presets are exactly
+`balanced`, `connectivity_first`, and `riparian_restoration`; each uses the
+direct weighted mean of the five finalized 0–100 component scores. The command
+does not recalculate raw indicators, download environmental datasets, or
+generate frontend/map-delivery artifacts.
+
+The earlier `build_balanced_baseline()` function and
+`balanced_baseline.csv` artifact remain available for Step 21 reproducibility.

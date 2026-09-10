@@ -1,9 +1,10 @@
-"""Build and audit the neutral five-component prioritization baseline.
+"""Build and audit the canonical five-component prioritization model.
 
-This module intentionally integrates the five finalized component artifacts only.
-It does not recalculate indicators, normalize component scores, or define policy
-presets.  The durable output is a narrow candidate-level table; the detailed
-real-data audit is retained in the provenance JSON.
+This module integrates the five finalized component artifacts only.  It does
+not recalculate indicators, normalize component scores, or define hard gates.
+The three final MVP preset vectors are canonical here; the historical Step 22
+sensitivity module imports the shared Balanced vector but remains the source
+of the reproducible experimental audit.
 """
 
 from __future__ import annotations
@@ -22,18 +23,72 @@ import pandas as pd
 
 CANDIDATE_UNITS_PATH = Path("data/processed/candidate_units.gpkg")
 CANDIDATE_UNITS_LAYER = "candidate_units"
-OUTPUT_PATH = Path("data/processed/prioritization/balanced_baseline.csv")
-PROVENANCE_PATH = Path("data/processed/prioritization/balanced_baseline.provenance.json")
+OUTPUT_PATH = Path("data/processed/prioritization/prioritization_scores.csv")
+PROVENANCE_PATH = Path("data/processed/prioritization/prioritization_scores.provenance.json")
+PRESETS_PATH = Path("data/processed/prioritization/presets.json")
+BALANCED_BASELINE_OUTPUT_PATH = Path("data/processed/prioritization/balanced_baseline.csv")
+BALANCED_BASELINE_PROVENANCE_PATH = Path(
+    "data/processed/prioritization/balanced_baseline.provenance.json"
+)
 EXPECTED_CANDIDATE_COUNT = 26_395
 BOUNDARY_FLAG = "boundary_edge_flag"
 BALANCED_SCORE = "balanced_score"
-WEIGHTS = OrderedDict(
+BALANCED_WEIGHTS = OrderedDict(
     [
         ("habitat_context_score", 0.20),
         ("ecological_network_score", 0.20),
         ("riparian_opportunity_score", 0.20),
         ("protected_area_reinforcement_score", 0.20),
         ("restoration_land_availability_score", 0.20),
+    ]
+)
+CONNECTIVITY_FIRST_WEIGHTS = OrderedDict(
+    [
+        ("habitat_context_score", 0.20),
+        ("ecological_network_score", 0.30),
+        ("riparian_opportunity_score", 0.10),
+        ("protected_area_reinforcement_score", 0.25),
+        ("restoration_land_availability_score", 0.15),
+    ]
+)
+RIPARIAN_RESTORATION_WEIGHTS = OrderedDict(
+    [
+        ("habitat_context_score", 0.20),
+        ("ecological_network_score", 0.10),
+        ("riparian_opportunity_score", 0.35),
+        ("protected_area_reinforcement_score", 0.15),
+        ("restoration_land_availability_score", 0.20),
+    ]
+)
+# Backwards-compatible Step 21 name.  The canonical final definitions above
+# remain the only production source of weight values.
+WEIGHTS = BALANCED_WEIGHTS
+PRESET_DEFINITIONS = OrderedDict(
+    [
+        (
+            "balanced",
+            {
+                "name": "Balanced",
+                "purpose": "neutral equal-component reference",
+                "weights": BALANCED_WEIGHTS,
+            },
+        ),
+        (
+            "connectivity_first",
+            {
+                "name": "Connectivity First",
+                "purpose": "emphasize ecological-network configuration and protected-network reinforcement",
+                "weights": CONNECTIVITY_FIRST_WEIGHTS,
+            },
+        ),
+        (
+            "riparian_restoration",
+            {
+                "name": "Riparian Restoration",
+                "purpose": "emphasize focal wetland/inland-water restoration opportunity",
+                "weights": RIPARIAN_RESTORATION_WEIGHTS,
+            },
+        ),
     ]
 )
 COMPONENTS = OrderedDict(
@@ -81,12 +136,16 @@ COMPONENTS = OrderedDict(
     ]
 )
 SCORE_FIELDS = tuple(WEIGHTS)
+PRESET_SCORE_FIELDS = OrderedDict(
+    (preset_id, f"{preset_id}_score") for preset_id in PRESET_DEFINITIONS
+)
 OUTPUT_COLUMNS = (
     "hex_id",
     *SCORE_FIELDS,
     BALANCED_SCORE,
     BOUNDARY_FLAG,
 )
+FINAL_OUTPUT_COLUMNS = ("hex_id", *SCORE_FIELDS, *PRESET_SCORE_FIELDS.values(), BOUNDARY_FLAG)
 CONTRIBUTION_FIELDS = (
     "habitat_contribution",
     "network_contribution",
@@ -882,9 +941,582 @@ def load_and_reconcile_inputs() -> tuple[pd.DataFrame, pd.DataFrame, dict[str, A
     return joined, candidate_units, reconciliation
 
 
+SENSITIVITY_OUTPUT_PATH = Path("data/processed/prioritization/preset_sensitivity.csv")
+SENSITIVITY_PROVENANCE_PATH = Path(
+    "data/processed/prioritization/preset_sensitivity.provenance.json"
+)
+
+
+def calculate_prioritization_scores(frame: pd.DataFrame) -> pd.DataFrame:
+    """Calculate the three final weighted means in input order."""
+
+    _require_columns(frame, ("hex_id", *SCORE_FIELDS), "Prioritization input")
+    numeric = frame[list(SCORE_FIELDS)].apply(pd.to_numeric, errors="coerce")
+    values = numeric.to_numpy(dtype=float)
+    if numeric.isna().any().any() or not np.isfinite(values).all():
+        raise PrioritizationModelError(
+            "Prioritization input contains missing, non-numeric, or non-finite component scores"
+        )
+    if np.any((values < 0) | (values > 100)):
+        raise PrioritizationModelError("Prioritization component scores must lie in [0, 100]")
+    result = frame.copy()
+    for preset_id, config in PRESET_DEFINITIONS.items():
+        result[PRESET_SCORE_FIELDS[preset_id]] = weighted_mean(result, config["weights"])
+    score_values = result[list(PRESET_SCORE_FIELDS.values())].to_numpy(dtype=float)
+    if not np.isfinite(score_values).all() or np.any((score_values < 0) | (score_values > 100)):
+        raise PrioritizationModelError("Final preset scores must lie in [0, 100]")
+    return result
+
+
+def preset_metadata() -> OrderedDict[str, dict[str, Any]]:
+    """Return stable application metadata generated from canonical definitions."""
+
+    return OrderedDict(
+        (
+            preset_id,
+            {
+                "name": config["name"],
+                "weights": OrderedDict(
+                    (field, float(value)) for field, value in config["weights"].items()
+                ),
+            },
+        )
+        for preset_id, config in PRESET_DEFINITIONS.items()
+    )
+
+
+def _final_top_ids(frame: pd.DataFrame, score_field: str, fraction: float) -> set[str]:
+    count = max(1, math.ceil(len(frame) * fraction))
+    ordered = frame.sort_values([score_field, "hex_id"], ascending=[False, True], kind="mergesort")
+    return set(ordered.head(count)["hex_id"])
+
+
+def _final_top_n_ids(frame: pd.DataFrame, score_field: str, count: int) -> set[str]:
+    ordered = frame.sort_values([score_field, "hex_id"], ascending=[False, True], kind="mergesort")
+    return set(ordered.head(min(count, len(frame)))["hex_id"])
+
+
+def _final_top_subset(frame: pd.DataFrame, score_field: str, fraction: float) -> pd.DataFrame:
+    return frame[frame["hex_id"].isin(_final_top_ids(frame, score_field, fraction))].copy()
+
+
+def _final_rank_percentile(frame: pd.DataFrame, score_field: str) -> pd.Series:
+    if len(frame) <= 1:
+        return pd.Series(0.0, index=frame.index)
+    return (frame[score_field].rank(method="average") - 1.0) / (len(frame) - 1.0) * 100.0
+
+
+def _final_ordinal_ranks(frame: pd.DataFrame, score_field: str) -> pd.Series:
+    ordered = frame.sort_values([score_field, "hex_id"], ascending=[False, True], kind="mergesort")
+    ranks = pd.Series(range(1, len(frame) + 1), index=ordered.index, dtype=int)
+    return ranks.reindex(frame.index)
+
+
+def _final_overlap(frame: pd.DataFrame, score_field: str) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    balanced_field = PRESET_SCORE_FIELDS["balanced"]
+    for fraction, label in (
+        (0.25, "top_25_percent"),
+        (0.10, "top_10_percent"),
+        (0.05, "top_5_percent"),
+        (0.01, "top_1_percent"),
+    ):
+        balanced_ids = _final_top_ids(frame, balanced_field, fraction)
+        preset_ids = _final_top_ids(frame, score_field, fraction)
+        common = len(balanced_ids & preset_ids)
+        result[label] = {
+            "tail_size": len(balanced_ids),
+            "common_candidate_count": common,
+            "overlap_percent_relative_to_tail": 100.0 * common / len(balanced_ids),
+        }
+    balanced_ids = _final_top_n_ids(frame, balanced_field, 100)
+    preset_ids = _final_top_n_ids(frame, score_field, 100)
+    common = len(balanced_ids & preset_ids)
+    result["top_100"] = {
+        "tail_size": len(balanced_ids),
+        "common_candidate_count": common,
+        "overlap_percent_relative_to_tail": 100.0 * common / len(balanced_ids),
+    }
+    return result
+
+
+def _final_rank_movement(frame: pd.DataFrame, score_field: str) -> dict[str, Any]:
+    balanced = _final_rank_percentile(frame, PRESET_SCORE_FIELDS["balanced"])
+    preset = _final_rank_percentile(frame, score_field)
+    absolute = (preset - balanced).abs()
+    return {
+        "median_absolute_percentile_movement": float(absolute.median()),
+        "p90_absolute_percentile_movement": float(absolute.quantile(0.90)),
+        "p95_absolute_percentile_movement": float(absolute.quantile(0.95)),
+        "candidates_moving_at_least_10_percentile_points": int((absolute >= 10).sum()),
+        "candidates_moving_at_least_25_percentile_points": int((absolute >= 25).sum()),
+        "maximum_absolute_percentile_movement": float(absolute.max()),
+    }
+
+
+def _final_profile(subset: pd.DataFrame) -> dict[str, Any]:
+    return {
+        COMPONENT_LABELS[field]: {
+            "field": field,
+            "median": float(subset[field].median()),
+            "p10": float(subset[field].quantile(0.10)),
+            "p90": float(subset[field].quantile(0.90)),
+        }
+        for field in SCORE_FIELDS
+    }
+
+
+def _final_compensability(subset: pd.DataFrame) -> dict[str, Any]:
+    values = subset[list(SCORE_FIELDS)]
+    minimum = values.min(axis=1)
+    return {
+        "candidate_count": int(len(subset)),
+        "any_component_le_25": int((values <= 25).any(axis=1).sum()),
+        "any_component_eq_0": int((values == 0).any(axis=1).sum()),
+        "two_or_more_components_le_25": int((values <= 25).sum(axis=1).ge(2).sum()),
+        "median_minimum_component_score": float(minimum.median()),
+        "p10_minimum_component_score": float(minimum.quantile(0.10)),
+    }
+
+
+def _final_availability_tradeoff(frame: pd.DataFrame, score_field: str) -> dict[str, Any]:
+    top10 = _final_top_subset(frame, score_field, 0.10)
+    availability = frame["restoration_land_availability_score"]
+    return {
+        "score_vs_availability_correlation": _correlation(frame[score_field], availability),
+        "top_10_median_availability": float(top10["restoration_land_availability_score"].median()),
+        "top_10_p10_availability": float(
+            top10["restoration_land_availability_score"].quantile(0.10)
+        ),
+        "top_10_availability_le_25_count": int(
+            (top10["restoration_land_availability_score"] <= 25).sum()
+        ),
+        "top_10_median_candidate_land_area_ha": (
+            float(top10["candidate_land_area_ha"].median())
+            if "candidate_land_area_ha" in top10
+            else None
+        ),
+    }
+
+
+def _final_thematic_validation(frame: pd.DataFrame) -> dict[str, Any]:
+    balanced = _final_top_subset(frame, PRESET_SCORE_FIELDS["balanced"], 0.10)
+    connectivity_fields = {
+        "network_ge_75": lambda subset: subset["ecological_network_score"] >= 75,
+        "protection_ge_75": lambda subset: subset["protected_area_reinforcement_score"] >= 75,
+        "network_and_protection_ge_75": lambda subset: (
+            (subset["ecological_network_score"] >= 75)
+            & (subset["protected_area_reinforcement_score"] >= 75)
+        ),
+        "riparian_eq_0": lambda subset: subset["riparian_opportunity_score"] == 0,
+        "availability_le_25": lambda subset: subset["restoration_land_availability_score"] <= 25,
+    }
+    riparian_fields = {
+        "riparian_ge_75": lambda subset: subset["riparian_opportunity_score"] >= 75,
+        "riparian_ge_90": lambda subset: subset["riparian_opportunity_score"] >= 90,
+        "riparian_eq_0": lambda subset: subset["riparian_opportunity_score"] == 0,
+        "network_le_25": lambda subset: subset["ecological_network_score"] <= 25,
+        "protection_le_25": lambda subset: subset["protected_area_reinforcement_score"] <= 25,
+        "availability_le_25": lambda subset: subset["restoration_land_availability_score"] <= 25,
+    }
+
+    def counts(subset: pd.DataFrame, conditions: dict[str, Any]) -> dict[str, int]:
+        return {name: int(condition(subset).sum()) for name, condition in conditions.items()}
+
+    connectivity = _final_top_subset(frame, PRESET_SCORE_FIELDS["connectivity_first"], 0.10)
+    riparian = _final_top_subset(frame, PRESET_SCORE_FIELDS["riparian_restoration"], 0.10)
+    return {
+        "top_10_percent_candidate_count": int(len(balanced)),
+        "connectivity_first": {
+            "final_preset": counts(connectivity, connectivity_fields),
+            "balanced_comparison": counts(balanced, connectivity_fields),
+        },
+        "riparian_restoration": {
+            "final_preset": counts(riparian, riparian_fields),
+            "balanced_comparison": counts(balanced, riparian_fields),
+        },
+    }
+
+
+def _final_top_records(
+    frame: pd.DataFrame, score_field: str, count: int = 20
+) -> list[dict[str, Any]]:
+    ordered = frame.sort_values([score_field, "hex_id"], ascending=[False, True], kind="mergesort")
+    records = []
+    for _, row in ordered.head(count).iterrows():
+        records.append(
+            {
+                "hex_id": str(row["hex_id"]),
+                "preset_score": float(row[score_field]),
+                "component_scores": {
+                    COMPONENT_LABELS[field]: float(row[field]) for field in SCORE_FIELDS
+                },
+                "boundary_edge_flag": bool(row[BOUNDARY_FLAG]),
+            }
+        )
+    return records
+
+
+def _final_top20_overlap(frame: pd.DataFrame) -> dict[str, Any]:
+    ids = {
+        preset_id: _final_top_n_ids(frame, score_field, 20)
+        for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+    }
+    result: dict[str, Any] = {}
+    for first, second in (
+        ("balanced", "connectivity_first"),
+        ("balanced", "riparian_restoration"),
+        ("connectivity_first", "riparian_restoration"),
+    ):
+        common = ids[first] & ids[second]
+        result[f"{first}_vs_{second}"] = {
+            "top_20_count_each": 20,
+            "overlap_count": len(common),
+            "overlap_percent": 100.0 * len(common) / 20.0,
+        }
+    return result
+
+
+def _final_distinctive_candidates(frame: pd.DataFrame, preset_id: str) -> list[dict[str, Any]]:
+    balanced_field = PRESET_SCORE_FIELDS["balanced"]
+    preset_field = PRESET_SCORE_FIELDS[preset_id]
+    balanced_percentile = _final_rank_percentile(frame, balanced_field)
+    preset_percentile = _final_rank_percentile(frame, preset_field)
+    gain = (preset_percentile - balanced_percentile).sort_values(ascending=False, kind="mergesort")
+    balanced_rank = _final_ordinal_ranks(frame, balanced_field)
+    preset_rank = _final_ordinal_ranks(frame, preset_field)
+    records = []
+    for index in gain.head(10).index:
+        row = frame.loc[index]
+        records.append(
+            {
+                "hex_id": str(row["hex_id"]),
+                "balanced_rank": int(balanced_rank.loc[index]),
+                "thematic_rank": int(preset_rank.loc[index]),
+                "rank_change": int(balanced_rank.loc[index] - preset_rank.loc[index]),
+                "percentile_rank_gain": float(gain.loc[index]),
+                "component_scores": {
+                    COMPONENT_LABELS[field]: float(row[field]) for field in SCORE_FIELDS
+                },
+            }
+        )
+    return records
+
+
+def _final_winner_diagnostics(frame: pd.DataFrame) -> dict[str, Any]:
+    score_fields = list(PRESET_SCORE_FIELDS.values())
+    scores = frame[score_fields]
+    maximum = scores.max(axis=1)
+    at_max = scores.eq(maximum, axis=0)
+    tie_count = at_max.sum(axis=1)
+    counts = {
+        preset_id: {
+            "count": int(at_max[score_field].sum()),
+            "percent": float(100.0 * at_max[score_field].mean()),
+        }
+        for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+    }
+    exclusive_counts = {
+        preset_id: {
+            "count": int((at_max[score_field] & tie_count.eq(1)).sum()),
+            "percent": float(100.0 * (at_max[score_field] & tie_count.eq(1)).mean()),
+        }
+        for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+    }
+    tie_patterns: dict[str, int] = {}
+    for index in frame.index[tie_count > 1]:
+        pattern = "+".join(
+            preset_id
+            for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+            if bool(at_max.loc[index, score_field])
+        )
+        tie_patterns[pattern] = tie_patterns.get(pattern, 0) + 1
+    return {
+        "winner_counts_including_tie_participation": counts,
+        "exclusive_winner_counts": exclusive_counts,
+        "candidate_count_with_any_tie": int((tie_count > 1).sum()),
+        "tie_cardinality_counts": {
+            str(cardinality): int((tie_count == cardinality).sum())
+            for cardinality in sorted(tie_count.unique())
+            if cardinality > 1
+        },
+        "tie_patterns": tie_patterns,
+        "descriptive_only": True,
+    }
+
+
+def _final_consistent_candidates(frame: pd.DataFrame) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for fraction, label in (
+        (0.10, "top_10_percent"),
+        (0.05, "top_5_percent"),
+        (0.01, "top_1_percent"),
+    ):
+        sets = [
+            _final_top_ids(frame, score_field, fraction)
+            for score_field in PRESET_SCORE_FIELDS.values()
+        ]
+        common = set.intersection(*sets)
+        result[label] = {"count": len(common), "hex_ids": sorted(common)}
+    sets = [
+        _final_top_n_ids(frame, score_field, 100) for score_field in PRESET_SCORE_FIELDS.values()
+    ]
+    common = set.intersection(*sets)
+    result["top_100"] = {"count": len(common), "hex_ids": sorted(common)}
+    return result
+
+
+def _final_spatial_boundary_sanity(
+    frame: pd.DataFrame, candidate_units: pd.DataFrame
+) -> dict[str, Any]:
+    coordinate_fields = [field for field in ("grid_col", "grid_row") if field in candidate_units]
+    result: dict[str, Any] = {
+        "candidate_source_count": int(len(candidate_units)),
+        "output_count": int(len(frame)),
+        "full_region_representation": bool(set(frame["hex_id"]) == set(candidate_units["hex_id"])),
+        "coordinate_fields": coordinate_fields,
+        "presets": {},
+    }
+    if len(coordinate_fields) < 2:
+        result["warning"] = "candidate source lacks grid_col/grid_row"
+        return result
+    working = frame.merge(
+        candidate_units[["hex_id", *coordinate_fields]],
+        on="hex_id",
+        how="left",
+        validate="one_to_one",
+    )
+    for preset_id, score_field in PRESET_SCORE_FIELDS.items():
+        subset = _final_top_subset(working, score_field, 0.10)
+        thirds: dict[str, Any] = {}
+        for field in coordinate_fields:
+            low, high = float(working[field].min()), float(working[field].max())
+            edges = np.linspace(low, high, 4)
+            assignments = pd.cut(
+                working[field], bins=edges, labels=["low", "middle", "high"], include_lowest=True
+            )
+            thirds[field] = {
+                label: {
+                    "candidate_count": int((assignments == label).sum()),
+                    "top_10_count": int(assignments.loc[subset.index].eq(label).sum()),
+                }
+                for label in ("low", "middle", "high")
+            }
+        result["presets"][preset_id] = {
+            "top_10_candidate_count": int(len(subset)),
+            "boundary_edge_count": int(subset[BOUNDARY_FLAG].sum()),
+            "coordinate_thirds": thirds,
+            "top_10_coordinate_thirds_with_zero_candidates": [
+                f"{field}:{label}"
+                for field, values in thirds.items()
+                for label, counts in values.items()
+                if counts["top_10_count"] == 0
+            ],
+        }
+    return result
+
+
+def _final_boundary_diagnostics(frame: pd.DataFrame) -> dict[str, Any]:
+    edge = frame[BOUNDARY_FLAG].astype(bool)
+    result = {
+        "boundary_edge_candidate_count": int(edge.sum()),
+        "non_edge_candidate_count": int((~edge).sum()),
+        "presets": {},
+    }
+    for preset_id, score_field in PRESET_SCORE_FIELDS.items():
+        result["presets"][preset_id] = {
+            label: {"boundary_count": int(edge.loc[frame["hex_id"].isin(ids)].sum())}
+            for fraction, label in (
+                (0.25, "top_25_percent"),
+                (0.10, "top_10_percent"),
+                (0.05, "top_5_percent"),
+                (0.01, "top_1_percent"),
+            )
+            for ids in [_final_top_ids(frame, score_field, fraction)]
+        }
+    return result
+
+
+def _final_score_bins(values: pd.Series) -> dict[str, int]:
+    return {
+        "0–10": int((values <= 10).sum()),
+        ">10–25": int(((values > 10) & (values <= 25)).sum()),
+        ">25–50": int(((values > 25) & (values <= 50)).sum()),
+        ">50–75": int(((values > 50) & (values <= 75)).sum()),
+        ">75–90": int(((values > 75) & (values <= 90)).sum()),
+        ">90": int((values > 90).sum()),
+    }
+
+
+def _final_step22_reconciliation(frame: pd.DataFrame) -> dict[str, Any]:
+    if not SENSITIVITY_OUTPUT_PATH.exists():
+        raise PrioritizationModelError(
+            f"Missing Step 22 sensitivity artifact: {SENSITIVITY_OUTPUT_PATH}"
+        )
+    reference = pd.read_csv(SENSITIVITY_OUTPUT_PATH)
+    selected = {
+        "balanced": "balanced_reference_score",
+        "connectivity_first": "connectivity_medium_score",
+        "riparian_restoration": "riparian_medium_score",
+    }
+    required = ["hex_id", BOUNDARY_FLAG, *selected.values()]
+    _require_columns(reference, required, "Step 22 sensitivity artifact")
+    reference["hex_id"] = normalize_ids(reference, "Step 22 sensitivity artifact")
+    if len(reference) != len(frame) or set(reference["hex_id"]) != set(frame["hex_id"]):
+        raise PrioritizationModelError(
+            "Step 22 sensitivity IDs do not reconcile with final candidates"
+        )
+    reference[BOUNDARY_FLAG] = normalize_boundary_flags(
+        reference[BOUNDARY_FLAG], "Step 22 sensitivity boundary flags"
+    )
+    merged = frame[["hex_id", BOUNDARY_FLAG, *PRESET_SCORE_FIELDS.values()]].merge(
+        reference[required],
+        on="hex_id",
+        how="left",
+        validate="one_to_one",
+        suffixes=("", "_step22"),
+    )
+    result: dict[str, Any] = {
+        "artifact_path": str(SENSITIVITY_OUTPUT_PATH),
+        "provenance_path": str(SENSITIVITY_PROVENANCE_PATH),
+        "tolerance": STRICT_TOLERANCE,
+        "comparisons": {},
+    }
+    boundary_mismatches = int((merged[BOUNDARY_FLAG] != merged[f"{BOUNDARY_FLAG}_step22"]).sum())
+    result["boundary_flag_mismatches"] = boundary_mismatches
+    if boundary_mismatches:
+        raise PrioritizationModelError("Final boundary flags do not match the Step 22 artifact")
+    for preset_id, step22_field in selected.items():
+        final_field = PRESET_SCORE_FIELDS[preset_id]
+        difference = (merged[final_field] - merged[step22_field]).abs()
+        mismatches = int((difference > STRICT_TOLERANCE).sum())
+        maximum = float(difference.max()) if not difference.empty else 0.0
+        result["comparisons"][preset_id] = {
+            "final_score_field": final_field,
+            "step22_score_field": step22_field,
+            "mismatched_rows": mismatches,
+            "maximum_absolute_difference": maximum,
+            "reconciles_within_tolerance": mismatches == 0,
+        }
+        if mismatches:
+            raise PrioritizationModelError(
+                f"Final {final_field} does not reproduce Step 22 {step22_field}"
+            )
+    return result
+
+
+def _read_step22_evidence() -> dict[str, Any]:
+    if not SENSITIVITY_PROVENANCE_PATH.exists():
+        raise PrioritizationModelError(
+            f"Missing Step 22 sensitivity provenance: {SENSITIVITY_PROVENANCE_PATH}"
+        )
+    data = json.loads(SENSITIVITY_PROVENANCE_PATH.read_text(encoding="utf-8"))
+    comparison = data.get("preset_intensity_comparison", {})
+    return {
+        "source_provenance_path": str(SENSITIVITY_PROVENANCE_PATH),
+        "connectivity_first": comparison.get("connectivity_first", []),
+        "riparian_restoration": comparison.get("riparian_restoration", []),
+        "selected_vectors": {
+            "connectivity_first": "connectivity_medium",
+            "riparian_restoration": "riparian_medium",
+        },
+    }
+
+
+def _final_audit(
+    frame: pd.DataFrame,
+    candidate_units: pd.DataFrame,
+    reconciliation: dict[str, Any],
+    step22_reconciliation: dict[str, Any],
+    step22_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    score_distributions = {
+        preset_id: _distribution(frame[score_field])
+        for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+    }
+    score_bins = {
+        preset_id: _final_score_bins(frame[score_field])
+        for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+    }
+    correlations: dict[str, Any] = {}
+    for first, second in (
+        ("balanced", "connectivity_first"),
+        ("balanced", "riparian_restoration"),
+        ("connectivity_first", "riparian_restoration"),
+    ):
+        correlations[f"{first}_vs_{second}"] = _correlation(
+            frame[PRESET_SCORE_FIELDS[first]], frame[PRESET_SCORE_FIELDS[second]]
+        )
+    profiles = {
+        preset_id: {
+            "candidate_count": int(len(_final_top_subset(frame, score_field, 0.10))),
+            "profile": _final_profile(_final_top_subset(frame, score_field, 0.10)),
+        }
+        for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+    }
+    reconciliation = dict(reconciliation)
+    reconciliation["component_row_counts"] = {
+        label: int(values["component_rows"])
+        for label, values in reconciliation["components"].items()
+    }
+    reconciliation["final_output_rows"] = int(len(frame))
+    reconciliation["missing_final_ids"] = []
+    reconciliation["extra_final_ids"] = []
+    reconciliation["duplicate_final_ids"] = int(frame["hex_id"].duplicated().sum())
+    return {
+        "candidate_count": int(len(frame)),
+        "reconciliation": reconciliation,
+        "final_score_distributions": score_distributions,
+        "final_score_bins": score_bins,
+        "preset_correlations": correlations,
+        "rank_movement_vs_balanced": {
+            preset_id: _final_rank_movement(frame, score_field)
+            for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+            if preset_id != "balanced"
+        },
+        "top_tail_overlap_vs_balanced": {
+            preset_id: _final_overlap(frame, score_field)
+            for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+            if preset_id != "balanced"
+        },
+        "top_10_percent_component_profiles": profiles,
+        "preset_thematic_validation": _final_thematic_validation(frame),
+        "compensability": {
+            preset_id: _final_compensability(_final_top_subset(frame, score_field, 0.10))
+            for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+        },
+        "availability_tradeoff": {
+            preset_id: _final_availability_tradeoff(frame, score_field)
+            for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+        },
+        "top_candidates": {
+            preset_id: _final_top_records(frame, score_field)
+            for preset_id, score_field in PRESET_SCORE_FIELDS.items()
+        },
+        "top_20_pairwise_overlap": _final_top20_overlap(frame),
+        "distinctive_preset_candidates": {
+            preset_id: _final_distinctive_candidates(frame, preset_id)
+            for preset_id in PRESET_SCORE_FIELDS
+            if preset_id != "balanced"
+        },
+        "preset_winner": _final_winner_diagnostics(frame),
+        "consistent_top_candidates": _final_consistent_candidates(frame),
+        "spatial_boundary_sanity": _final_spatial_boundary_sanity(frame, candidate_units),
+        "boundary_diagnostics": _final_boundary_diagnostics(frame),
+        "step22_selected_column_reconciliation": step22_reconciliation,
+        "step22_sensitivity_evidence": step22_evidence,
+    }
+
+
+def write_preset_metadata(path: Path = PRESETS_PATH) -> None:
+    """Write the application-facing preset metadata from canonical definitions."""
+
+    _write_json(path, preset_metadata())
+
+
 def build_balanced_baseline(
-    output_path: Path = OUTPUT_PATH,
-    provenance_path: Path = PROVENANCE_PATH,
+    output_path: Path = BALANCED_BASELINE_OUTPUT_PATH,
+    provenance_path: Path = BALANCED_BASELINE_PROVENANCE_PATH,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Build the durable equal-weight table and complete provenance audit."""
 
@@ -964,23 +1596,184 @@ def build_balanced_baseline(
     return output, provenance
 
 
+def build_prioritization_model(
+    output_path: Path = OUTPUT_PATH,
+    provenance_path: Path = PROVENANCE_PATH,
+    presets_path: Path = PRESETS_PATH,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Build the canonical three-preset MVP table and provenance audit."""
+
+    started = time.perf_counter()
+    for config in PRESET_DEFINITIONS.values():
+        validate_weights(config["weights"])
+    joined, candidate_units, reconciliation = load_and_reconcile_inputs()
+    component_provenance = {}
+    for label, config in COMPONENTS.items():
+        provenance_path_for_component = Path(config["path"]).with_suffix(".provenance.json")
+        if not provenance_path_for_component.exists():
+            raise PrioritizationModelError(
+                f"Missing finalized component provenance: {provenance_path_for_component}"
+            )
+        component_provenance[label] = str(provenance_path_for_component)
+
+    scored = calculate_prioritization_scores(joined)
+    scored = scored.sort_values("hex_id", kind="mergesort").reset_index(drop=True)
+    step22_evidence = _read_step22_evidence()
+    step22_reconciliation = _final_step22_reconciliation(scored)
+    audit = _final_audit(
+        scored, candidate_units, reconciliation, step22_reconciliation, step22_evidence
+    )
+    formula_by_preset = {
+        preset_id: " + ".join(
+            f"{weight:.2f} * {field}" for field, weight in config["weights"].items()
+        )
+        for preset_id, config in PRESET_DEFINITIONS.items()
+    }
+    rationale = {
+        "balanced": {
+            "selection": "Retain the equal-weight baseline unchanged.",
+            "reason": "Step 21–22 showed numerically stable behavior, no catastrophic single-component dominance, transparent interpretation, and a useful ecological/availability tradeoff; there was no serious reason to replace 20/20/20/20/20.",
+            "interpretation": "equal component importance; not statistically optimized",
+        },
+        "connectivity_first": {
+            "selection": "Select the former Connectivity Medium vector.",
+            "reason": "Medium was clearly differentiated while preserving acceptable availability and contained severe-weakness costs. Strong added only modest thematic gain, reduced availability, increased severe-weakness cases, and increased top-100 churn; Mild remained too close to Balanced.",
+            "interpretation": "emphasize ecological-network configuration and protected-network reinforcement",
+        },
+        "riparian_restoration": {
+            "selection": "Select the former Riparian Medium vector.",
+            "reason": "Medium produced a clearer Riparian shift, retained elimination of zero-Riparian candidates from the top 10%, and kept severe weakness close to Mild. Strong added only modest Riparian gain while degrading broader Habitat/Protection balance and increasing churn; Mild differentiated less clearly.",
+            "interpretation": "emphasize focal wetland/inland-water restoration opportunity",
+        },
+        "policy_status": "Preset weights are stakeholder/scenario emphasis choices, not learned coefficients, calibrated ecological truth, probabilities, or optimization results. All five components retain positive weight and weighted averaging remains compensatory.",
+    }
+    provenance: dict[str, Any] = {
+        "project_name": "Landscape Restoration Prioritizer",
+        "model_name": "Canonical three-preset MVP prioritization model",
+        "step": "Step 23 final MVP preset selection and canonical model artifact",
+        "model_status": "FINALIZED FOR MVP",
+        "input_components": {
+            label: {
+                "artifact_path": str(config["path"]),
+                "provenance_path": component_provenance[label],
+                "score_field": config["score_field"],
+                "definition": config["definition"],
+                "component_recalculated": False,
+            }
+            for label, config in COMPONENTS.items()
+        },
+        "presets": {
+            preset_id: {
+                "id": preset_id,
+                "name": config["name"],
+                "purpose": config["purpose"],
+                "weights": {field: float(value) for field, value in config["weights"].items()},
+                "weight_sum": math.fsum(config["weights"].values()),
+                "all_weights_positive": all(value > 0 for value in config["weights"].values()),
+                "status": "FINALIZED FOR MVP",
+            }
+            for preset_id, config in PRESET_DEFINITIONS.items()
+        },
+        "final_preset_status_table": [
+            {
+                "id": preset_id,
+                "name": config["name"],
+                "weights": {field: float(value) for field, value in config["weights"].items()},
+                "purpose": config["purpose"],
+                "status": "FINALIZED FOR MVP",
+            }
+            for preset_id, config in PRESET_DEFINITIONS.items()
+        ],
+        "formula": "preset_score = sum(component_score * preset_component_weight); no further transformation",
+        "formula_by_preset": formula_by_preset,
+        "normalization": "No percentile rank, min-max scaling, z-score, clipping, max-to-100 rescaling, or other transformation follows the weighted mean.",
+        "weight_selection_rationale": rationale,
+        "step22_reference": {
+            "sensitivity_output_path": str(SENSITIVITY_OUTPUT_PATH),
+            "sensitivity_provenance_path": str(SENSITIVITY_PROVENANCE_PATH),
+            "balanced_uses_equal_weights": True,
+            "connectivity_first_uses_former_connectivity_medium_vector": True,
+            "riparian_restoration_uses_former_riparian_medium_vector": True,
+            "mild_and_strong_variants_are_sensitivity_experiments_only": True,
+            "weights_statistically_optimized": False,
+            "evidence": step22_evidence,
+        },
+        "audit": audit,
+        "candidate_count": int(len(scored)),
+        "reconciliation": audit["reconciliation"],
+        "caveats": [
+            "No ground-truth restoration-outcome dataset was used; weights were not statistically optimized.",
+            "Preset weights express stakeholder/scenario emphasis choices, not calibrated ecological truth or probabilities.",
+            "All five components retain positive weight in every preset.",
+            "Composite weighted averaging is compensatory: strong performance on one component can offset weak performance on another; no hard gates are applied.",
+            "Component scores are finalized authoritative inputs; raw indicators are not recalculated here.",
+            "The output is decision-support screening, not a recommendation category, implementation decision, or restoration probability.",
+            "Boundary flags are reconciled diagnostics and do not alter scores.",
+            "Percentile ranks are temporary diagnostics only and are not persisted as model scores.",
+            "The winner diagnostic is descriptive only; no permanent candidate category is created.",
+            "No environmental datasets were downloaded by this command.",
+        ],
+        "output": {
+            "path": str(output_path),
+            "columns": list(FINAL_OUTPUT_COLUMNS),
+            "rows": int(len(scored)),
+            "geometry_included": False,
+            "raw_indicator_fields_included": False,
+            "experimental_sensitivity_fields_included": False,
+            "deterministic_order": "ascending hex_id",
+        },
+        "presets_metadata_output": {
+            "path": str(presets_path),
+            "columns": ["name", "weights"],
+            "experimental_presets_included": False,
+        },
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "environmental_datasets_downloaded": False,
+        "dependency_changes": [],
+        "warnings": [
+            "Observed score maxima are reported without rescaling.",
+            "Correlation, rank, tail, and spatial diagnostics are descriptive and do not establish causal effect or ecological optimality.",
+        ],
+        "runtime_seconds": time.perf_counter() - started,
+    }
+    output = scored[list(FINAL_OUTPUT_COLUMNS)].copy()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output.to_csv(output_path, index=False, float_format="%.10f")
+    write_preset_metadata(presets_path)
+    provenance["output"]["size_bytes"] = int(output_path.stat().st_size)
+    provenance["presets_metadata_output"]["size_bytes"] = int(presets_path.stat().st_size)
+    provenance["provenance_path"] = str(provenance_path)
+    _write_json(provenance_path, provenance)
+    for _ in range(3):
+        actual_size = int(provenance_path.stat().st_size)
+        if provenance.get("provenance_size_bytes") == actual_size:
+            break
+        provenance["provenance_size_bytes"] = actual_size
+        _write_json(provenance_path, provenance)
+    return output, provenance
+
+
 def main() -> None:
-    output, provenance = build_balanced_baseline()
-    audit = provenance["audit"]
+    output, provenance = build_prioritization_model()
+    distributions = provenance["audit"]["final_score_distributions"]
     print(
-        f"Equal-weight baseline: {len(output):,} candidates written to {OUTPUT_PATH} "
+        f"Final prioritization model: {len(output):,} candidates written to {OUTPUT_PATH} "
         f"({OUTPUT_PATH.stat().st_size:,} bytes)"
     )
     print(
-        f"Score range {audit['balanced_score_distribution']['min']:.6f}–"
-        f"{audit['balanced_score_distribution']['max']:.6f}; "
-        f"boundary flags agree; provenance {PROVENANCE_PATH} "
-        f"({PROVENANCE_PATH.stat().st_size:,} bytes)"
+        "Preset weights: "
+        + "; ".join(
+            f"{preset_id}=" + "/".join(f"{value:.2f}" for value in config["weights"].values())
+            for preset_id, config in PRESET_DEFINITIONS.items()
+        )
     )
     print(
-        "Preset readiness: "
-        f"suitable reference={provenance['preset_readiness_summary']['suitable_reference_for_later_preset_testing']}; "
-        "no alternative weights introduced."
+        "Score ranges: "
+        + "; ".join(
+            f"{preset_id}={values['min']:.6f}–{values['max']:.6f}"
+            for preset_id, values in distributions.items()
+        )
+        + f"; provenance {PROVENANCE_PATH} ({PROVENANCE_PATH.stat().st_size:,} bytes)"
     )
 
 

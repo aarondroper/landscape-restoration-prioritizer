@@ -20,6 +20,7 @@ import pandas as pd
 
 from .prioritization_model import (
     BALANCED_SCORE,
+    BALANCED_WEIGHTS,
     BOUNDARY_FLAG,
     COMPONENT_LABELS,
     SCORE_FIELDS,
@@ -34,7 +35,6 @@ BALANCED_REFERENCE_PATH = Path("data/processed/prioritization/balanced_baseline.
 OUTPUT_PATH = Path("data/processed/prioritization/preset_sensitivity.csv")
 PROVENANCE_PATH = Path("data/processed/prioritization/preset_sensitivity.provenance.json")
 
-BALANCED_WEIGHTS = OrderedDict((field, 0.20) for field in SCORE_FIELDS)
 SCHEMES = OrderedDict(
     [
         (

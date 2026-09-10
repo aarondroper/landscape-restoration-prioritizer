@@ -897,15 +897,15 @@ secondary normalization, re-ranking, clipping, standardization, percentile
 transformation, or z-scoring is applied to `balanced_score`. Because every
 input is bounded in `[0, 100]`, the baseline is also bounded in `[0, 100]`.
 
-Equal weighting is initially neutral and transparent, not empirically
-optimized. Weighted averaging is compensatory: strong performance on one
-component can offset weak performance on another. Four components are
-ecological/context dimensions and one is land availability, so equal
-per-component weights nominally allocate 80% of the total to ecological/context
-dimensions and 20% to land availability. This is intentional for the baseline
-and will be reviewed before defining any final preset. Connectivity-first and
-Riparian-restoration weights remain pending validation and are not defined in
-Step 21. The detailed real-data audit and provenance are written to
+Equal weighting is neutral and transparent, not empirically optimized.
+Weighted averaging is compensatory: strong performance on one component can
+offset weak performance on another. Four components are ecological/context
+dimensions and one is land availability, so equal per-component weights
+nominally allocate 80% of the total to ecological/context dimensions and 20%
+to land availability. This is intentional for the historical baseline. The
+`build_balanced_baseline()` function remains available for Step 21
+reproducibility; the canonical CLI and finalized presets are defined in Step
+23 below. The detailed real-data audit and provenance are written to
 `data/processed/prioritization/balanced_baseline.provenance.json`; the durable
 candidate table is
 `data/processed/prioritization/balanced_baseline.csv` and contains no geometry
@@ -956,3 +956,66 @@ command is:
 ```bash
 python -m restoration_prioritizer.preset_sensitivity
 ```
+
+## Final MVP preset selection and canonical model artifact (Step 23)
+
+Step 23 locks the three user-facing MVP presets. The final named vectors are
+defined canonically in `src/restoration_prioritizer/prioritization_model.py`:
+
+| Preset | Habitat | Network | Riparian | Protection | Availability | Status |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Balanced | 0.20 | 0.20 | 0.20 | 0.20 | 0.20 | FINALIZED FOR MVP |
+| Connectivity First | 0.20 | 0.30 | 0.10 | 0.25 | 0.15 | FINALIZED FOR MVP |
+| Riparian Restoration | 0.20 | 0.10 | 0.35 | 0.15 | 0.20 | FINALIZED FOR MVP |
+
+The stable machine identifiers are `balanced`, `connectivity_first`, and
+`riparian_restoration`. Balanced remains the equal-component reference because
+Step 21–22 found numerically stable behavior, transparent interpretation, a
+useful ecological/availability tradeoff, and no serious reason to replace
+equal weights. It is equal component importance, not a statistically optimized
+model.
+
+Connectivity First selects the Step 22 Connectivity Medium vector. Mild was
+too close to Balanced (Spearman approximately 0.986 and top-10 overlap about
+90%); Medium was clearly differentiated (Spearman approximately 0.961,
+top-10 overlap about 82%) while retaining acceptable availability. Strong
+provided only a modest further Network gain but reduced top-10 availability,
+increased severe-weakness cases, and increased top-100 churn. Riparian
+Restoration selects the Step 22 Riparian Medium vector. It provided a clearer
+Riparian shift than Mild while retaining similar severe-weakness behavior;
+Strong added only a modest further Riparian gain while degrading broader
+Habitat/Protection balance and increasing churn.
+
+These weights express stakeholder/scenario emphasis choices. They are not
+empirically learned coefficients, calibrated ecological truth, probabilities,
+or optimization results. All five dimensions retain positive weight in every
+preset. The final score is the direct compensatory weighted arithmetic mean:
+
+```text
+preset_score = sum(component_score * preset_component_weight)
+```
+
+No percentile ranking, scaling, clipping, z-scoring, rescaling, or hard gate is
+applied after the weighted mean. Strong variants were rejected because their
+marginal thematic gains did not justify broader tradeoffs; Mild variants were
+rejected because Medium provided clearer differentiation at acceptable cost.
+Weighted averaging therefore remains compensatory: a strong component can
+offset a weak component.
+
+The canonical command is:
+
+```bash
+python -m restoration_prioritizer.prioritization_model
+```
+
+It reuses the five finalized component artifacts without recalculating raw
+indicators and writes the narrow, deterministic candidate-level output
+`data/processed/prioritization/prioritization_scores.csv` with the five
+component scores, the three final preset scores, and `boundary_edge_flag`.
+The detailed real-data audit is stored in
+`data/processed/prioritization/prioritization_scores.provenance.json`; the
+optional application metadata is
+`data/processed/prioritization/presets.json`. Step 22 Mild/Medium/Strong
+columns remain historical sensitivity artifacts only. The Step 21
+`balanced_baseline.csv` generation function remains available for
+reproducibility and is not the canonical final output.
