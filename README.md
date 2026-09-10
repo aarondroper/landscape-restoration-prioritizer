@@ -22,9 +22,9 @@ scenario presets are finalized for the MVP.
 
 Authoritative public datasets will later flow through reproducible Python
 ingestion and geospatial processing into normalized analytical indicators,
-candidate analysis units, and a lightweight web-ready artifact for a React +
-MapLibre frontend. Delivery format and any use of local PostGIS remain open
-until data and analytical needs are understood.
+candidate analysis units, and a lightweight static GeoJSON artifact for the
+React + MapLibre frontend. The current delivery contract does not introduce
+an API, PostGIS, or vector tiling.
 
 ## Development setup
 
@@ -349,6 +349,22 @@ generate frontend/map-delivery artifacts.
 
 The earlier `build_balanced_baseline()` function and
 `balanced_baseline.csv` artifact remain available for Step 21 reproducibility.
+
+## Run the technical frontend foundation (Step 25)
+
+With Node.js and npm available:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+`npm run data:sync` copies the already-generated Step 24 delivery artifacts
+into ignored static frontend assets. It is also run automatically before local
+development and production builds. See
+[`docs/frontend-foundation.md`](docs/frontend-foundation.md) for the current
+technical validation notes.
 
 ## Generate the canonical web-delivery candidate dataset (Step 24)
 

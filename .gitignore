@@ -42,3 +42,10 @@ data/processed/*
 !data/raw/.gitkeep
 !data/interim/.gitkeep
 !data/processed/.gitkeep
+
+# Frontend dependencies, build output, and generated delivery copies
+web/node_modules/
+web/dist/
+web/public/data/candidates.geojson
+web/public/data/candidates.metadata.json
+web/public/data/presets.json
