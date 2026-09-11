@@ -27,7 +27,7 @@ Generalization variants for raster-derived layers:
 | Candidate | Recommendation | User-facing name | Loading |
 | --- | --- | --- | --- |
 | Protected areas | INCLUDE, terrestrial-semantic moderate display | Protected areas | Lazy |
-| Riparian context | INCLUDE, moderate display | Wetland & inland water | Lazy |
+| Wetland & inland water | INCLUDE, moderate display | Wetland & inland water | Lazy |
 | Semi-natural habitat | EXCLUDE from lightweight MVP | — | — |
 | Candidate agricultural land | EXCLUDE; redundant with candidates and inspector | — | — |
 
@@ -45,6 +45,11 @@ The cross-layer feasibility assessment is:
 | Wetland & inland water | High; exact `riparian_focal_fraction` classes, explicitly not a stream network | Moderate display is 8,369 features / 419,746 vertices | Moderate; rerun mask polygonization and documented generalization | None; static asset |
 | Semi-natural habitat | High; one input proxy explains two score components | Strong display is still 9,757 features / 1.21M vertices | High at regional extent; would need stronger generalization or tiles | None for static output; tiles become likely later |
 | Candidate agricultural land | Low incremental value; duplicates candidate map and inspector | A class-3 polygon would be fragmented and redundant | Moderate/high extra vectorization for little user value | None; static output |
+
+The approved MVP adoption status is: Protected areas — adopted; Wetland &
+inland water — adopted; Semi-natural habitat — excluded; Candidate
+agricultural land — excluded. No separate Ecological Network layer is
+introduced.
 
 ## Protected areas
 
@@ -91,12 +96,12 @@ protected context.
 Include the terrestrial-semantic moderate representation and load it lazily
 when first enabled. Its 160 KB gzip payload is small, it has 571 features, and
 it has high explanatory value for the protected-area component. Style it as a
-restrained translucent blue-green fill at approximately 0.18–0.25 opacity with
-a slightly darker, thin outline. Place it below candidate priority, and label
-the legend `Protected areas (terrestrial context)`. Do not imply that the
-layer is a parcel-level restriction or that the whole hexagon is protected.
+restrained desaturated mauve/plum fill at approximately 0.17 opacity with a
+slightly darker, thin outline. Place it below candidate priority, and label
+the legend `Protected terrestrial context`. Do not imply that the layer is a
+parcel-level restriction or that the whole hexagon is protected.
 
-## Riparian context
+## Wetland & inland water
 
 ### Provenance and semantic choice
 
@@ -134,14 +139,14 @@ about one third of mapped area, which is too much for the default display.
 ### Product recommendation and cartography
 
 Include the moderate generalized layer as a truthful contextual overview and
-load it lazily. The 1.47 MB gzip payload and 8,369 features are acceptable for
-a high-value optional layer, though the 420,000 vertices warrant lazy loading
-and no automatic frontend fetch. Keep the legend label `Wetland & inland
-water (display-generalized)` or a concise equivalent. Use a muted blue-green
-fill at approximately 0.18–0.22 opacity, no heavy outline, and place it below
-candidate priority. Candidate priority must remain visually dominant. Include
-a short caveat in the later UI that this is mapped NMD wetland/inland-water
-context and not a comprehensive watercourse network.
+load it lazily. The audit payload and 8,369 features are acceptable for a
+high-value optional layer, though the 420,000 vertices warrant lazy loading
+and no automatic frontend fetch. Keep the legend label `Generalized mapped
+wetland and inland water`. Use a muted blue-gray fill at approximately 0.24
+opacity with a thin related blue outline, and place it below candidate
+priority. Candidate priority must remain visually dominant. Include a short
+caveat in the UI that this is mapped NMD wetland/inland-water context and not
+a comprehensive watercourse network.
 
 ## Semi-natural habitat context
 
@@ -232,9 +237,10 @@ should be fetched on initial map load. Semi-natural habitat is `DO NOT INCLUDE`
 for this MVP; if it is later restored at full regional extent, tiled
 infrastructure is the likely practical architecture.
 
-## Step 32 recommendation
+## Approved MVP adoption
 
-Implement only the two evidence-supported optional layers in Step 32:
+The approved lightweight MVP implements only the two evidence-supported
+optional layers:
 
 - `Protected areas`: terrestrial-semantic moderate display, 1 ha minimum patch,
   15 m simplification, lazy static GeoJSON.

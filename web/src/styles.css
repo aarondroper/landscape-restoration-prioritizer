@@ -129,6 +129,13 @@ button { color: inherit; }
 .checkbox-row input:checked { background: var(--color-accent); border-color: var(--color-accent); }
 .checkbox-row input:checked::after { border: solid #fff; border-width: 0 1.5px 1.5px 0; content: ""; height: 7px; left: 4px; position: absolute; top: 2px; transform: rotate(45deg); width: 3px; }
 .checkbox-row input:focus-visible { outline: 2px solid #6a9b8c; outline-offset: 2px; }
+.context-layer-row { margin-top: 13px; }
+.context-layer-row .checkbox-row { margin-top: 0; }
+.context-layer-legend { align-items: center; color: var(--color-muted); display: flex; flex-wrap: wrap; font-size: 0.67rem; gap: 6px; line-height: 1.35; margin: 6px 0 0 24px; }
+.context-layer-swatch { border: 1px solid; display: inline-block; flex: 0 0 15px; height: 9px; opacity: 0.75; }
+.context-layer-status { color: #8b382b; }
+.context-layer-retry { background: transparent; border: 0; color: var(--color-accent); cursor: pointer; font-size: 0.67rem; padding: 0; text-decoration: underline; }
+.context-layer-retry:focus-visible { outline: 2px solid #6a9b8c; outline-offset: 2px; }
 
 .map-stage, .map-region, .map-container { min-height: 0; position: relative; }
 .map-stage { overflow: hidden; }

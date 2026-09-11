@@ -13,6 +13,7 @@ import { MapDisplayControls } from "./MapDisplayControls";
 import { PresetSelector } from "./PresetSelector";
 import { TopCandidates } from "./TopCandidates";
 import { WeightControls } from "./WeightControls";
+import type { ContextLayerId, ContextLayerStatuses } from "../map/contextualLayers";
 
 interface SidebarProps {
   metadata: DeliveryMetadata;
@@ -21,9 +22,13 @@ interface SidebarProps {
   presetDefinition: PresetDefinition;
   rawWeights: RawWeightVector;
   priorityVisible: boolean;
+  contextLayerVisibility: Record<ContextLayerId, boolean>;
+  contextLayerStatuses: ContextLayerStatuses;
   onPresetChange: (preset: ActivePresetId) => void;
   onWeightChange: (field: ComponentScoreField, value: number) => void;
   onPriorityChange: (visible: boolean) => void;
+  onContextLayerChange: (layer: ContextLayerId, visible: boolean) => void;
+  onContextLayerRetry: (layer: ContextLayerId) => void;
   shortlist?: { candidate: ShortlistItem | WeightIndexItem; rank: number; score: number }[];
   shortlistStatus: "loading" | "ready" | "error" | "updating";
   selectedCandidateId?: string;
@@ -37,9 +42,13 @@ export function Sidebar({
   presetDefinition,
   rawWeights,
   priorityVisible,
+  contextLayerVisibility,
+  contextLayerStatuses,
   onPresetChange,
   onWeightChange,
   onPriorityChange,
+  onContextLayerChange,
+  onContextLayerRetry,
   shortlist,
   shortlistStatus,
   selectedCandidateId,
@@ -67,6 +76,10 @@ export function Sidebar({
         <MapDisplayControls
           priorityVisible={priorityVisible}
           onPriorityChange={onPriorityChange}
+          contextLayerVisibility={contextLayerVisibility}
+          contextLayerStatuses={contextLayerStatuses}
+          onContextLayerChange={onContextLayerChange}
+          onContextLayerRetry={onContextLayerRetry}
         />
         <TopCandidates
           activePreset={activePreset}

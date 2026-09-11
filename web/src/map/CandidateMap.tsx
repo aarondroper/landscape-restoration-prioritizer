@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { GeoJSONSourceSpecification } from "@maplibre/maplibre-gl-style-spec";
 import {
   Map as MapLibreMap,
   NavigationControl,
@@ -23,6 +24,12 @@ import {
   getCandidateFillPaint,
 } from "./candidateLayers";
 import {
+  CONTEXT_LAYER_CONFIG,
+  reorderContextLayers,
+  type ContextLayerId,
+  type ContextLayerStatus,
+} from "./contextualLayers";
+import {
   CANDIDATE_DATA_URL,
   CANDIDATE_FILL_LAYER_ID,
   CANDIDATE_SELECTED_FILL_LAYER_ID,
@@ -44,6 +51,10 @@ interface CandidateMapProps {
   weights: WeightVector;
   selectedCandidateId?: string;
   priorityVisible: boolean;
+  protectedAreasVisible: boolean;
+  wetlandInlandWaterVisible: boolean;
+  contextLayerRetry: Record<ContextLayerId, number>;
+  onContextLayerStatusChange: (layer: ContextLayerId, status: ContextLayerStatus) => void;
   onSelect: (candidate: CandidateProperties) => void;
   focusRequest?: Pick<ShortlistItem, "hex_id" | "longitude" | "latitude"> & { selectOnFocus?: boolean };
 }
@@ -62,6 +73,10 @@ export function CandidateMap({
   weights,
   selectedCandidateId,
   priorityVisible,
+  protectedAreasVisible,
+  wetlandInlandWaterVisible,
+  contextLayerRetry,
+  onContextLayerStatusChange,
   onSelect,
   focusRequest,
 }: CandidateMapProps) {
@@ -72,7 +87,18 @@ export function CandidateMap({
   const activePresetRef = useRef(activePreset);
   const weightsRef = useRef(weights);
   const priorityVisibleRef = useRef(priorityVisible);
+  const protectedAreasVisibleRef = useRef(protectedAreasVisible);
+  const wetlandInlandWaterVisibleRef = useRef(wetlandInlandWaterVisible);
+  const contextStatusRef = useRef<Record<ContextLayerId, ContextLayerStatus>>({
+    protectedAreas: "idle",
+    wetlandInlandWater: "idle",
+  });
+  const contextRequestedRef = useRef<Record<ContextLayerId, boolean>>({
+    protectedAreas: false,
+    wetlandInlandWater: false,
+  });
   const focusRequestRef = useRef(focusRequest);
+  const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string>();
 
   useEffect(() => {
@@ -83,7 +109,15 @@ export function CandidateMap({
     activePresetRef.current = activePreset;
     weightsRef.current = weights;
     priorityVisibleRef.current = priorityVisible;
-  }, [activePreset, priorityVisible, weights]);
+    protectedAreasVisibleRef.current = protectedAreasVisible;
+    wetlandInlandWaterVisibleRef.current = wetlandInlandWaterVisible;
+  }, [
+    activePreset,
+    priorityVisible,
+    protectedAreasVisible,
+    wetlandInlandWaterVisible,
+    weights,
+  ]);
 
   useEffect(() => {
     focusRequestRef.current = focusRequest;
@@ -153,10 +187,10 @@ export function CandidateMap({
       map.addLayer(candidateSelectedHaloLayer);
       map.addLayer(candidateSelectedOutlineLayer);
       map.setPaintProperty(CANDIDATE_FILL_LAYER_ID, "fill-color", getMapFillPaint(activePresetRef.current, weightsRef.current));
-      map.setLayoutProperty(
+      map.setPaintProperty(
         CANDIDATE_FILL_LAYER_ID,
-        "visibility",
-        priorityVisibleRef.current ? "visible" : "none",
+        "fill-opacity",
+        priorityVisibleRef.current ? 0.78 : 0,
       );
       const selectedFilter = getCandidateSelectedFilter(selectedHexIdRef.current);
       map.setFilter(CANDIDATE_SELECTED_FILL_LAYER_ID, selectedFilter);
@@ -168,6 +202,7 @@ export function CandidateMap({
           map.once("idle", () => selectFocusedCandidate(map, focusRequestRef.current, onSelect));
         }
       }
+      setMapReady(true);
     };
 
     const onSourceData = (event: MapSourceDataEvent) => {
@@ -221,7 +256,83 @@ export function CandidateMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [metadata, onSelect]);
+  }, [metadata, onContextLayerStatusChange, onSelect]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    const layerRequests: { id: ContextLayerId; visible: boolean }[] = [
+      { id: "protectedAreas", visible: protectedAreasVisible },
+      { id: "wetlandInlandWater", visible: wetlandInlandWaterVisible },
+    ];
+
+    for (const request of layerRequests) {
+      const config = CONTEXT_LAYER_CONFIG[request.id];
+      const sourceExists = Boolean(map.getSource(config.sourceId));
+      const layersExist = config.layers.every((layer) => Boolean(map.getLayer(layer.id)));
+
+      if (!request.visible) {
+        for (const layer of config.layers) {
+          if (map.getLayer(layer.id)) map.setLayoutProperty(layer.id, "visibility", "none");
+        }
+        continue;
+      }
+
+      if (sourceExists && layersExist) {
+        for (const layer of config.layers) {
+          map.setLayoutProperty(layer.id, "visibility", "visible");
+        }
+        if (contextStatusRef.current[request.id] !== "ready") {
+          contextStatusRef.current[request.id] = "ready";
+          onContextLayerStatusChange(request.id, "ready");
+        }
+        continue;
+      }
+      if (contextRequestedRef.current[request.id]) continue;
+
+      contextRequestedRef.current[request.id] = true;
+      contextStatusRef.current[request.id] = "loading";
+      onContextLayerStatusChange(request.id, "loading");
+      void fetch(config.dataUrl)
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((data: unknown) => {
+          if (mapRef.current !== map) return;
+          if (!map.getSource(config.sourceId)) {
+            map.addSource(config.sourceId, {
+              type: "geojson",
+              data: data as GeoJSONSourceSpecification["data"],
+            });
+          }
+          for (const layer of config.layers) {
+            if (!map.getLayer(layer.id)) map.addLayer(layer, CANDIDATE_FILL_LAYER_ID);
+          }
+          reorderContextLayers(map);
+          const visible = request.id === "protectedAreas"
+            ? protectedAreasVisibleRef.current
+            : wetlandInlandWaterVisibleRef.current;
+          for (const layer of config.layers) {
+            map.setLayoutProperty(layer.id, "visibility", visible ? "visible" : "none");
+          }
+          contextStatusRef.current[request.id] = "ready";
+          onContextLayerStatusChange(request.id, "ready");
+        })
+        .catch(() => {
+          contextRequestedRef.current[request.id] = false;
+          contextStatusRef.current[request.id] = "error";
+          onContextLayerStatusChange(request.id, "error");
+        });
+    }
+  }, [
+    contextLayerRetry,
+    mapReady,
+    onContextLayerStatusChange,
+    protectedAreasVisible,
+    wetlandInlandWaterVisible,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -247,7 +358,7 @@ export function CandidateMap({
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     if (map.getLayer(CANDIDATE_FILL_LAYER_ID)) {
-      map.setLayoutProperty(CANDIDATE_FILL_LAYER_ID, "visibility", priorityVisible ? "visible" : "none");
+      map.setPaintProperty(CANDIDATE_FILL_LAYER_ID, "fill-opacity", priorityVisible ? 0.78 : 0);
     }
   }, [priorityVisible]);
 

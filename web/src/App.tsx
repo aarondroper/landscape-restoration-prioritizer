@@ -18,6 +18,7 @@ import type {
 import { PRESET_SCORE_FIELDS } from "./data/types";
 import { DEFAULT_RAW_WEIGHTS, normalizeWeights, rankWeightIndex, rawWeightsForPreset, type RawWeightVector } from "./lib/weighting";
 import { CandidateMap } from "./map/CandidateMap";
+import type { ContextLayerId, ContextLayerStatuses, ContextLayerStatus } from "./map/contextualLayers";
 import "./styles.css";
 
 type FocusRequest = Pick<ShortlistItem, "hex_id" | "longitude" | "latitude"> & { selectOnFocus?: boolean };
@@ -32,6 +33,18 @@ export default function App() {
   const [shortlistStatus, setShortlistStatus] = useState<"loading" | "ready" | "error">("loading");
   const [focusRequest, setFocusRequest] = useState<FocusRequest>();
   const [priorityVisible, setPriorityVisible] = useState(true);
+  const [contextLayerVisibility, setContextLayerVisibility] = useState<Record<ContextLayerId, boolean>>({
+    protectedAreas: false,
+    wetlandInlandWater: false,
+  });
+  const [contextLayerStatuses, setContextLayerStatuses] = useState<ContextLayerStatuses>({
+    protectedAreas: "idle",
+    wetlandInlandWater: "idle",
+  });
+  const [contextLayerRetry, setContextLayerRetry] = useState<Record<ContextLayerId, number>>({
+    protectedAreas: 0,
+    wetlandInlandWater: 0,
+  });
   const [weightIndex, setWeightIndex] = useState<WeightIndexItem[]>();
   const [weightIndexStatus, setWeightIndexStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [rankedWeightsKey, setRankedWeightsKey] = useState<string>();
@@ -78,6 +91,18 @@ export default function App() {
 
   const handleSelect = useCallback((candidate: CandidateProperties) => {
     setSelectedCandidate(candidate);
+  }, []);
+
+  const handleContextLayerChange = useCallback((layer: ContextLayerId, visible: boolean) => {
+    setContextLayerVisibility((current) => ({ ...current, [layer]: visible }));
+  }, []);
+
+  const handleContextLayerStatusChange = useCallback((layer: ContextLayerId, status: ContextLayerStatus) => {
+    setContextLayerStatuses((current) => ({ ...current, [layer]: status }));
+  }, []);
+
+  const handleContextLayerRetry = useCallback((layer: ContextLayerId) => {
+    setContextLayerRetry((current) => ({ ...current, [layer]: current[layer] + 1 }));
   }, []);
 
   const handleShortlistSelect = useCallback((candidate: ShortlistItem | WeightIndexItem) => {
@@ -169,9 +194,13 @@ export default function App() {
             presets={presets}
             rawWeights={rawWeights}
             priorityVisible={priorityVisible}
+            contextLayerVisibility={contextLayerVisibility}
+            contextLayerStatuses={contextLayerStatuses}
             onPresetChange={handlePresetChange}
             onWeightChange={handleWeightChange}
             onPriorityChange={setPriorityVisible}
+            onContextLayerChange={handleContextLayerChange}
+            onContextLayerRetry={handleContextLayerRetry}
             shortlist={displayedCandidates}
             shortlistStatus={displayedShortlistStatus}
             presetDefinition={activePresetDefinition}
@@ -185,6 +214,10 @@ export default function App() {
               weights={normalizeWeights(rawWeights)}
               selectedCandidateId={selectedCandidate?.hex_id}
               priorityVisible={priorityVisible}
+              protectedAreasVisible={contextLayerVisibility.protectedAreas}
+              wetlandInlandWaterVisible={contextLayerVisibility.wetlandInlandWater}
+              contextLayerRetry={contextLayerRetry}
+              onContextLayerStatusChange={handleContextLayerStatusChange}
               onSelect={handleSelect}
               focusRequest={focusRequest}
             />

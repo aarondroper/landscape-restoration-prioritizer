@@ -34,6 +34,11 @@ from .prioritization_model import (
     SCORE_FIELDS,
     preset_metadata,
 )
+from .contextual_layers import build_contextual_layers
+from .delivery_serialization import GEOMETRY_DECIMALS
+from .delivery_serialization import round_coordinates as _round_coordinates
+from .delivery_serialization import round_number as _round_number
+from .delivery_serialization import serialize_feature_collection
 
 DELIVERY_DIRECTORY = Path("data/processed/delivery")
 GEOJSON_OUTPUT_PATH = DELIVERY_DIRECTORY / "candidates.geojson"
@@ -68,7 +73,6 @@ DELIVERY_HECTARE_FIELDS = ("candidate_land_area_ha",)
 SCORE_DECIMALS = 3
 FRACTION_DECIMALS = 5
 HECTARE_DECIMALS = 2
-GEOMETRY_DECIMALS = 6
 TOP_N = 50
 WEIGHT_INDEX_FIELDS = ("hex_id", "longitude", "latitude", *SCORE_FIELDS)
 WGS84 = CRS.from_epsg(4326)
@@ -329,11 +333,6 @@ def assemble_delivery_frame(
     return joined, diagnostics
 
 
-def _round_number(value: float | int, decimals: int) -> float:
-    rounded = float(f"{float(value):.{decimals}f}")
-    return 0.0 if rounded == 0 else rounded
-
-
 def round_delivery_properties(frame: pd.DataFrame) -> pd.DataFrame:
     """Apply the documented delivery precision without altering source frames."""
 
@@ -353,16 +352,8 @@ def round_delivery_properties(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def _round_coordinates(value: Any) -> Any:
-    if isinstance(value, (list, tuple)):
-        return [_round_coordinates(item) for item in value]
-    if isinstance(value, (float, int, np.floating, np.integer)):
-        return _round_number(value, GEOMETRY_DECIMALS)
-    return value
-
-
 def _rounded_geometry(geometry: Any) -> dict[str, Any]:
-    return _round_coordinates(mapping(geometry))
+    return _round_coordinates(mapping(geometry), GEOMETRY_DECIMALS)
 
 
 def _delivery_property_dict(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -551,18 +542,9 @@ def build_candidate_weight_index(
 def serialize_geojson(features: list[dict[str, Any]]) -> bytes:
     """Serialize a deterministic compact RFC-compatible FeatureCollection."""
 
-    payload = {
-        "type": "FeatureCollection",
-        "features": features,
-    }
     try:
-        return json.dumps(
-            payload,
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    except (TypeError, ValueError) as exc:
+        return serialize_feature_collection(features)
+    except ValueError as exc:
         raise WebDeliveryError("GeoJSON contains a non-serializable or non-finite value") from exc
 
 
@@ -761,6 +743,7 @@ def build_web_delivery(
     """Build the compact GeoJSON and metadata, then return the audit."""
 
     started = time.perf_counter()
+    contextual_layers = build_contextual_layers()
     if not geometry_path.exists():
         raise WebDeliveryError(f"Missing candidate geometry source: {geometry_path}")
     if not score_path.exists():
@@ -942,6 +925,7 @@ def build_web_delivery(
         },
         "delivery_architecture": "one static GeoJSON FeatureCollection; no API, PostGIS, PMTiles, MBTiles, or vector tiling introduced",
         "environmental_datasets_downloaded": False,
+        "contextual_layers": contextual_layers,
         "dependency_changes": [],
         "warnings": [],
         "runtime_seconds": time.perf_counter() - started,

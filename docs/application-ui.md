@@ -15,7 +15,7 @@ ordered ramp, with stops at 0, 25, 40, 55, 70, 85, and 100; the legend uses
 the same ramp and describes the values as relative model scores from 0 to 100.
 
 The left panel contains the project identity, a compact prioritization-preset
-selector, adjustable component weights, Map Layers with candidate priority, a
+selector, adjustable component weights, Map Layers, a
 compact Top Candidates screening shortlist, and the screening-scale model
 note. The shortlist shows the top five entries for a canonical preset from the
 static top-50 delivery companion. Custom weights use a separately lazy-loaded
@@ -59,12 +59,32 @@ outcomes, terrain quality, stream proximity, or habitat-block connection.
 
 ## Real-data-only content
 
-The application presents only the existing candidate GeoJSON properties and
-the approved preset metadata. It does not show protected-area polygons,
-rivers/streams, land-cover layers, terrain, hillshade, imagery, place search,
-filters, full ranking browsers, exports, or other mock-up placeholders. `hex_id` is called
+The application presents the existing candidate GeoJSON properties, the
+approved preset metadata, and the two approved static contextual display
+layers. It does not show rivers/streams, semi-natural habitat, candidate
+agricultural land, terrain, hillshade, imagery, place search, filters, full
+ranking browsers, exports, or other mock-up placeholders. `hex_id` is called
 an analysis unit and the geometry is treated as a deterministic 500 m hexagon,
 not an H3 cell or parcel.
+
+## Map Layers
+
+The section contains three compact accessible checkbox rows: Candidate
+priority, Protected areas, and Wetland & inland water. Candidate priority is
+on by default and retains its continuous relative-score ramp from 0 to 100.
+The two contextual layers are off by default and each has a small swatch
+matching its map style. Protected areas is labeled as terrestrial context.
+Wetland & inland water includes the concise note “Generalized mapped wetland
+and inland water”; it is display-only mapped context, not a comprehensive
+watercourse network.
+
+Context layers are loaded lazily on first enable, retained in memory for later
+on/off toggles, and never receive pointer events, popups, hover content, or
+inspector content. If a load fails, the corresponding control shows “Unable to
+load” and a retry action; the rest of the application remains available.
+Candidate priority can be turned off without removing candidate hit-testing,
+hover, or selection, so contextual exploration does not destroy the
+analytical interaction surface.
 
 ## Validation and deferred work
 

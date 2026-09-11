@@ -10,25 +10,28 @@ from __future__ import annotations
 
 import gzip
 import json
-import shutil
-import subprocess
 from pathlib import Path
 from typing import Any, Iterable
 
 import geopandas as gpd
-import numpy as np
 import rasterio
-from rasterio.features import rasterize
-from shapely import make_valid
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
+
+from restoration_prioritizer.contextual_layers import (
+    MODERATE_MINIMUM_PATCH_HA,
+    MODERATE_SIMPLIFICATION_TOLERANCE_M,
+    WETLAND_INLAND_WATER_CODES,
+    _clean_geometry,
+    _coordinate_count,
+    _make_mask_raster as _make_production_mask_raster,
+    _polygonize_jsonl as _polygonize_production_mask,
+)
 
 from restoration_prioritizer.nmd_semantics import (
     HABITAT_CONTEXT_PROXY,
     ROLE_FACTUAL_GROUPS,
     FACTUAL_GROUP_CODES,
-    INLAND_WATER,
-    WETLAND_CONTEXT,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,11 +42,7 @@ CANDIDATE_PATH = ROOT / "data/processed/candidate_units.gpkg"
 OUTPUT_DIR = ROOT / "data/derived/diagnostics/map_layers"
 
 NMD_ROLE_CODES = {
-    "riparian_context": frozenset(
-        code
-        for group in (*ROLE_FACTUAL_GROUPS[WETLAND_CONTEXT], INLAND_WATER)
-        for code in FACTUAL_GROUP_CODES[group]
-    ),
+    "riparian_context": WETLAND_INLAND_WATER_CODES,
     "semi_natural_habitat": frozenset(
         code
         for group in ROLE_FACTUAL_GROUPS[HABITAT_CONTEXT_PROXY]
@@ -51,37 +50,11 @@ NMD_ROLE_CODES = {
     ),
     "candidate_agricultural": frozenset({3}),
 }
-TERRESTRIAL_CODES = frozenset(
-    code
-    for group, codes in FACTUAL_GROUP_CODES.items()
-    if group not in {"no_data", INLAND_WATER, "sea"}
-    for code in codes
-)
 VARIANTS = (
     ("light", 0.25, 5.0),
-    ("moderate", 1.0, 15.0),
+    ("moderate", MODERATE_MINIMUM_PATCH_HA, MODERATE_SIMPLIFICATION_TOLERANCE_M),
     ("strong", 5.0, 30.0),
 )
-
-
-def _clean_geometry(geometry: Any) -> Any:
-    if geometry.is_empty:
-        return geometry
-    if not geometry.is_valid:
-        geometry = make_valid(geometry)
-    if geometry.geom_type == "GeometryCollection":
-        geometry = unary_union(
-            part for part in geometry.geoms if part.geom_type in {"Polygon", "MultiPolygon"}
-        )
-    return geometry
-
-
-def _coordinate_count(value: Any) -> int:
-    if not value:
-        return 0
-    if isinstance(value[0], (int, float)):
-        return 1
-    return sum(_coordinate_count(item) for item in value)
 
 
 def _geometry_metrics(geometries: Iterable[Any]) -> dict[str, Any]:
@@ -139,66 +112,14 @@ def _make_mask_raster(
     protected_geometry: Any | None = None,
 ) -> tuple[Path, int]:
     path = OUTPUT_DIR / f"{name}.tif"
-    selected_pixels = 0
-    with rasterio.open(NMD_PATH) as source:
-        profile = source.profile.copy()
-        profile.update(
-            driver="GTiff",
-            dtype="uint8",
-            count=1,
-            nodata=0,
-            compress="DEFLATE",
-            predictor=1,
-            tiled=True,
-            blockxsize=256,
-            blockysize=256,
-        )
-        with rasterio.open(path, "w", **profile) as target:
-            for _, window in source.block_windows(1):
-                data = source.read(1, window=window, masked=False)
-                valid = source.read_masks(1, window=window) > 0
-                if codes is not None:
-                    selected = np.isin(data, tuple(codes)) & valid
-                else:
-                    selected = (
-                        rasterize(
-                            [(protected_geometry, 1)],
-                            out_shape=data.shape,
-                            transform=rasterio.windows.transform(window, source.transform),
-                            fill=0,
-                            dtype="uint8",
-                            all_touched=False,
-                        ).astype(bool)
-                        & np.isin(data, tuple(TERRESTRIAL_CODES))
-                        & valid
-                    )
-                selected_pixels += int(selected.sum())
-                target.write(selected.astype("uint8"), 1, window=window)
-    return path, selected_pixels
+    return path, _make_production_mask_raster(
+        path, codes=codes, protected_geometry=protected_geometry
+    )
 
 
 def _polygonize_jsonl(mask_path: Path) -> Path:
-    rio = shutil.which("rio") or str(ROOT / ".venv/bin/rio")
     shapes_path = mask_path.with_suffix(".jsonl")
-    subprocess.run(
-        [
-            rio,
-            "shapes",
-            "--as-mask",
-            "--bidx",
-            "1",
-            "--projected",
-            "--sequence",
-            "--compact",
-            str(mask_path),
-            "-o",
-            str(shapes_path),
-        ],
-        check=True,
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
+    _polygonize_production_mask(mask_path, shapes_path)
     return shapes_path
 
 

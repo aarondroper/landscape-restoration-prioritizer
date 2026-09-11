@@ -18,6 +18,9 @@ The command writes:
 - `data/processed/delivery/candidates.geojson`
 - `data/processed/delivery/candidates.metadata.json`
 - `data/processed/delivery/candidate_shortlists.json`
+- `data/processed/delivery/candidate_weight_index.json`
+- `data/processed/delivery/protected_areas.geojson`
+- `data/processed/delivery/wetland_inland_water.geojson`
 
 The GeoJSON is a single compact UTF-8 RFC-compatible `FeatureCollection`,
 ordered by ascending `hex_id`. Each feature has a feature-level `id` equal to
@@ -124,13 +127,30 @@ The current architecture is one static GeoJSON FeatureCollection consumed by
 the React/MapLibre frontend. The approved MVP does not add PMTiles, MBTiles,
 Tippecanoe, APIs, PostGIS, or a second candidate geometry representation.
 
+The delivery command also creates two display-only contextual GeoJSON assets.
+`protected_areas.geojson` is the terrestrial-semantic moderate protected-area
+mask. `wetland_inland_water.geojson` is the moderate generalized NMD wetland
+and inland-water mask using the exact `riparian_focal_fraction` classes, with
+sea excluded. Both are EPSG:4326, contain polygonal geometry and empty feature
+property objects, and use a 1 ha minimum patch plus 15 m
+topology-preserving simplification. They are display derivatives; the
+wetland/water asset does not replace or feed back into Riparian Opportunity or
+any other score.
+
+The frontend does not preload either environmental asset. Each is fetched from
+the static `/data/` directory only when its Map Layers checkbox is first
+enabled, then its in-memory MapLibre source is retained for visibility toggles
+within the session. A failed optional fetch is reported beside its control and
+can be retried without affecting candidate priority, weighting, shortlist, or
+inspection behavior.
+
 The current real-artifact benchmark is:
 
 - 26,395 features;
-- 24,979,911 uncompressed bytes (946.4 bytes per feature);
-- 4,021,798 bytes at gzip level 9 (152.4 gzip bytes per feature);
-- 6.21:1 uncompressed-to-gzip compression ratio;
-- approximately 42.38% geometry/feature-ID/`hex_id` payload and 57.62%
+- 21,796,432 uncompressed bytes (825.8 bytes per feature);
+- 2,835,899 bytes at gzip level 9 (107.4 gzip bytes per feature);
+- 7.69:1 uncompressed-to-gzip compression ratio;
+- approximately 33.96% geometry/feature-ID/`hex_id` payload and 66.04%
   additional properties by the documented difference benchmark.
 
 The measured result is classified **CLEARLY SUITABLE FOR SINGLE GEOJSON** from
@@ -146,4 +166,5 @@ This is a regional decision-support screening dataset, not a restoration
 probability, legal designation, parcel dataset, or implementation decision.
 The boundary flag is diagnostic only. The explanatory fields expose direct
 raw inputs used by the finalized components; they are not additional model
-components. No environmental datasets are downloaded by the delivery command.
+components. No environmental datasets are downloaded by the delivery command;
+the contextual assets are generated from existing local processed inputs.

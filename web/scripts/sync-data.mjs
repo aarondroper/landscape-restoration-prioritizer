@@ -33,6 +33,16 @@ const artifacts = [
     source: path.join(dataDirectory, "prioritization", "presets.json"),
     required: true,
   },
+  {
+    name: "protected_areas.geojson",
+    source: path.join(dataDirectory, "delivery", "protected_areas.geojson"),
+    required: true,
+  },
+  {
+    name: "wetland_inland_water.geojson",
+    source: path.join(dataDirectory, "delivery", "wetland_inland_water.geojson"),
+    required: true,
+  },
 ];
 
 const generationHint =
@@ -93,9 +103,15 @@ if (metadata.sha256 && metadata.sha256 !== sourceHash) {
 const copied = [];
 for (const artifact of artifacts) {
   if (!(await ensureSourceExists(artifact))) continue;
+  const sourceStats = await stat(artifact.source);
+  if (sourceStats.size >= maxPagesAssetBytes) {
+    throw new Error(
+      `${artifact.name} is ${sourceStats.size} bytes; Cloudflare Pages static assets must remain below ${maxPagesAssetBytes} bytes (25 MiB).`,
+    );
+  }
   const destination = path.join(destinationDirectory, artifact.name);
   await copyFile(artifact.source, destination);
-  const [sourceStats, destinationStats] = await Promise.all([stat(artifact.source), stat(destination)]);
+  const destinationStats = await stat(destination);
   if (sourceStats.size !== destinationStats.size) {
     throw new Error(`Copied size mismatch for ${artifact.name}: ${artifact.source} -> ${destination}`);
   }
