@@ -67,3 +67,17 @@ export interface CandidateProperties {
   artificial_focal_fraction: number;
   boundary_edge_flag: boolean;
 }
+
+export interface ShortlistItem extends CandidateProperties {
+  rank: number;
+  longitude: number;
+  latitude: number;
+}
+
+export interface CandidateShortlists {
+  generated_at_utc: string;
+  top_n: number;
+  ranking_source: string;
+  tie_break: string;
+  presets: Record<PresetId, ShortlistItem[]>;
+}

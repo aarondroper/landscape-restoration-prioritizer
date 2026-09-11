@@ -38,6 +38,7 @@ from .prioritization_model import (
 DELIVERY_DIRECTORY = Path("data/processed/delivery")
 GEOJSON_OUTPUT_PATH = DELIVERY_DIRECTORY / "candidates.geojson"
 METADATA_OUTPUT_PATH = DELIVERY_DIRECTORY / "candidates.metadata.json"
+SHORTLIST_OUTPUT_PATH = DELIVERY_DIRECTORY / "candidate_shortlists.json"
 CANDIDATE_PROVENANCE_PATH = Path("data/processed/candidate_units.provenance.json")
 
 DELIVERY_SCORE_FIELDS = tuple(PRESET_SCORE_FIELDS.values()) + tuple(SCORE_FIELDS)
@@ -67,6 +68,7 @@ SCORE_DECIMALS = 3
 FRACTION_DECIMALS = 5
 HECTARE_DECIMALS = 2
 GEOMETRY_DECIMALS = 6
+TOP_N = 50
 WGS84 = CRS.from_epsg(4326)
 SKANE_BOUNDS = {
     "min_longitude": 11.0,
@@ -361,15 +363,20 @@ def _rounded_geometry(geometry: Any) -> dict[str, Any]:
     return _round_coordinates(mapping(geometry))
 
 
+def _delivery_property_dict(row: Mapping[str, Any]) -> dict[str, Any]:
+    properties = {
+        field: row[field].item() if hasattr(row[field], "item") else row[field]
+        for field in DELIVERY_PROPERTY_FIELDS
+    }
+    properties["hex_id"] = str(properties["hex_id"])
+    properties[BOUNDARY_FLAG] = bool(properties[BOUNDARY_FLAG])
+    return properties
+
+
 def _feature_records(frame_wgs84: gpd.GeoDataFrame) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for _, row in frame_wgs84.iterrows():
-        properties = {
-            field: row[field].item() if hasattr(row[field], "item") else row[field]
-            for field in DELIVERY_PROPERTY_FIELDS
-        }
-        properties["hex_id"] = str(properties["hex_id"])
-        properties[BOUNDARY_FLAG] = bool(properties[BOUNDARY_FLAG])
+        properties = _delivery_property_dict(row)
         record = {
             "type": "Feature",
             "id": str(row["hex_id"]),
@@ -378,6 +385,89 @@ def _feature_records(frame_wgs84: gpd.GeoDataFrame) -> list[dict[str, Any]]:
         }
         records.append(record)
     return records
+
+
+def build_candidate_shortlists(
+    frame_projected: gpd.GeoDataFrame,
+    top_n: int = TOP_N,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    """Rank and serialize shortlist rows from full-precision delivery inputs."""
+
+    if top_n <= 0:
+        raise WebDeliveryError("Shortlist top_n must be positive")
+    if not isinstance(frame_projected, gpd.GeoDataFrame):
+        raise WebDeliveryError("Shortlist source must be a GeoDataFrame")
+    if frame_projected.crs is None or frame_projected.crs.to_epsg() != 3006:
+        raise WebDeliveryError(
+            f"Shortlist centroid source CRS is {frame_projected.crs}; expected EPSG:3006"
+        )
+    if len(frame_projected) < top_n:
+        raise WebDeliveryError(
+            f"Shortlist source has {len(frame_projected):,} rows; cannot build top {top_n}"
+        )
+    _require_columns(
+        frame_projected,
+        ("geometry", *DELIVERY_PROPERTY_FIELDS),
+        "Shortlist source",
+    )
+
+    # The centroid is deliberately calculated while the geometry is still in
+    # SWEREF 99 TM metres, then transformed as a point to WGS84.
+    projected_centroids = frame_projected.geometry.centroid
+    centroid_points = gpd.GeoSeries(
+        projected_centroids, index=frame_projected.index, crs="EPSG:3006"
+    )
+    centroid_points_wgs84 = centroid_points.to_crs(WGS84)
+    delivered_properties = round_delivery_properties(
+        frame_projected[list(DELIVERY_PROPERTY_FIELDS)].copy()
+    )
+
+    shortlists: dict[str, list[dict[str, Any]]] = {}
+    audit: dict[str, Any] = {
+        "top_n": top_n,
+        "centroid_source_crs": "EPSG:3006",
+        "centroid_output_crs": "EPSG:4326",
+        "centroid_method": "geometry centroid in projected EPSG:3006, transformed to WGS84",
+        "presets": {},
+    }
+    for preset_id, score_field in PRESET_SCORE_FIELDS.items():
+        ranked = frame_projected.sort_values(
+            by=[score_field, "hex_id"],
+            ascending=[False, True],
+            kind="mergesort",
+        ).head(top_n)
+        entries: list[dict[str, Any]] = []
+        for rank, (index, row) in enumerate(ranked.iterrows(), start=1):
+            point = centroid_points_wgs84.loc[index]
+            longitude = float(point.x)
+            latitude = float(point.y)
+            if not (
+                math.isfinite(longitude)
+                and math.isfinite(latitude)
+                and SKANE_BOUNDS["min_longitude"] <= longitude <= SKANE_BOUNDS["max_longitude"]
+                and SKANE_BOUNDS["min_latitude"] <= latitude <= SKANE_BOUNDS["max_latitude"]
+            ):
+                raise WebDeliveryError(
+                    f"Shortlist centroid for {row['hex_id']} is outside plausible Skåne bounds: "
+                    f"({longitude}, {latitude})"
+                )
+            entry = {
+                "rank": rank,
+                "longitude": _round_number(longitude, GEOMETRY_DECIMALS),
+                "latitude": _round_number(latitude, GEOMETRY_DECIMALS),
+                **_delivery_property_dict(delivered_properties.loc[index]),
+            }
+            entries.append(entry)
+        shortlists[preset_id] = entries
+        audit["presets"][preset_id] = {
+            "entry_count": len(entries),
+            "rank_values": [entry["rank"] for entry in entries],
+            "top_hex_ids": [entry["hex_id"] for entry in entries[:5]],
+            "coordinates_within_skane_bounds": True,
+            "ranked_from": score_field,
+            "tie_break": "hex_id ascending",
+        }
+    return shortlists, audit
 
 
 def serialize_geojson(features: list[dict[str, Any]]) -> bytes:
@@ -587,6 +677,7 @@ def build_web_delivery(
     metadata_path: Path = METADATA_OUTPUT_PATH,
     presets_path: Path = PRESETS_PATH,
     expected_count: int | None = EXPECTED_CANDIDATE_COUNT,
+    shortlist_output_path: Path = SHORTLIST_OUTPUT_PATH,
 ) -> dict[str, Any]:
     """Build the compact GeoJSON and metadata, then return the audit."""
 
@@ -647,6 +738,35 @@ def build_web_delivery(
     for field in DELIVERY_PROPERTY_FIELDS:
         wgs84[field] = delivered_properties[field].to_numpy()
     features = _feature_records(wgs84)
+    shortlists, shortlist_audit = build_candidate_shortlists(joined, top_n=TOP_N)
+    shortlist_payload = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "top_n": TOP_N,
+        "ranking_source": str(score_path),
+        "ranking_precision": "full-precision canonical preset scores before delivery rounding",
+        "tie_break": "preset score descending, then hex_id ascending",
+        "centroid_source": {
+            "path": str(geometry_path),
+            "source_crs": "EPSG:3006",
+            "output_crs": "EPSG:4326",
+            "method": "candidate geometry centroid calculated in EPSG:3006, then transformed to WGS84",
+        },
+        "property_names": ["rank", "longitude", "latitude", *DELIVERY_PROPERTY_FIELDS],
+        "numeric_precision": {
+            "scores": f"{SCORE_DECIMALS} decimal places",
+            "fractions_and_ratios": f"{FRACTION_DECIMALS} decimal places",
+            "candidate_land_area_ha": f"{HECTARE_DECIMALS} decimal places",
+            "nearest_protected_hex_steps": "integer",
+            "boundary_edge_flag": "boolean",
+            "coordinates": f"{GEOMETRY_DECIMALS} decimal places",
+        },
+        "presets": shortlists,
+    }
+    shortlist_output_path.parent.mkdir(parents=True, exist_ok=True)
+    shortlist_output_path.write_text(
+        json.dumps(shortlist_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     payload = serialize_geojson(features)
     parsed = json.loads(payload.decode("utf-8"))
     if parsed.get("type") != "FeatureCollection" or len(parsed.get("features", [])) != len(wgs84):
@@ -705,6 +825,12 @@ def build_web_delivery(
         "sha256": hashlib.sha256(payload).hexdigest(),
         "geometry_audit": geometry_audit,
         "rounding_audit": rounding_audit,
+        "shortlist": {
+            "path": str(shortlist_output_path),
+            "top_n": TOP_N,
+            "ranking_source": str(score_path),
+            "audit": shortlist_audit,
+        },
         "payload_audit": payload_audit,
         "parse_audit": {
             "valid_json": True,

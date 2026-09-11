@@ -102,6 +102,29 @@ button { color: inherit; }
 .legend-scale, .legend-ends { color: var(--color-muted); display: flex; font-size: 0.69rem; justify-content: space-between; }
 .legend-scale { margin-top: 6px; }
 .legend-ends { color: #82908a; margin-top: 8px; }
+.top-candidates-context { color: var(--color-muted); font-size: 0.68rem; line-height: 1.35; margin: 8px 0 9px; }
+.shortlist-status { color: var(--color-muted); font-size: 0.75rem; margin: 12px 0 2px; }
+.candidate-shortlist { list-style: none; margin: 4px 0 0; padding: 0; }
+.candidate-shortlist li { margin: 0; }
+.candidate-shortlist-row {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #e7ece8;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 9px 5px;
+  text-align: left;
+  width: 100%;
+}
+.candidate-shortlist-row:hover, .candidate-shortlist-row[data-selected="true"] { background: #f1f5f1; }
+.candidate-shortlist-row[data-selected="true"] { border-left: 2px solid var(--color-accent); padding-left: 3px; }
+.candidate-shortlist-row:focus-visible { outline: 2px solid #6a9b8c; outline-offset: -2px; }
+.candidate-rank { color: var(--color-muted); flex: 0 0 24px; font-size: 0.76rem; font-variant-numeric: tabular-nums; }
+.candidate-shortlist-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.candidate-shortlist-score { font-size: 0.86rem; font-variant-numeric: tabular-nums; font-weight: 700; }
+.candidate-shortlist-id { color: var(--color-muted); font-size: 0.68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .checkbox-row { align-items: center; color: var(--color-text); cursor: pointer; display: flex; font-size: 0.8rem; gap: 9px; margin-top: 13px; }
 .checkbox-row input {
   appearance: none;

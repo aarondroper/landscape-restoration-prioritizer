@@ -17,6 +17,7 @@ The command writes:
 
 - `data/processed/delivery/candidates.geojson`
 - `data/processed/delivery/candidates.metadata.json`
+- `data/processed/delivery/candidate_shortlists.json`
 
 The GeoJSON is a single compact UTF-8 RFC-compatible `FeatureCollection`,
 ordered by ascending `hex_id`. Each feature has a feature-level `id` equal to
@@ -91,6 +92,25 @@ Rounding reconciliation is recorded in the metadata. The command does not
 re-rank candidates from rounded values; analytical rankings remain based on
 the full-precision canonical artifacts. Higher values mean stronger priority
 under the selected preset or component.
+
+## Candidate shortlist companion artifact
+
+`candidate_shortlists.json` contains the top 50 candidates for each finalized
+preset: `balanced`, `connectivity_first`, and `riparian_restoration`. It ranks
+the full-precision canonical scores from
+`data/processed/prioritization/prioritization_scores.csv` by preset score
+descending, then `hex_id` ascending, and assigns explicit ranks 1 through 50.
+Rounded display scores are never used to determine rank.
+
+Each entry contains `rank`, `longitude`, `latitude`, and the same candidate
+property contract as `candidates.geojson`. Centroids are calculated from the
+EPSG:3006 candidate geometry in `candidate_units.gpkg`, then transformed to
+EPSG:4326/WGS84; they are not calculated directly in geographic coordinates.
+Entries use the same delivery rounding conventions as the GeoJSON: scores to 3
+decimals, fractions and ratios to 5, candidate hectares to 2,
+protected-network steps as integers, boundary flags as booleans, and
+coordinates to 6 decimals. The artifact includes top-N, ranking, centroid,
+precision, and preset metadata for static frontend validation.
 
 ## Delivery architecture assessment
 

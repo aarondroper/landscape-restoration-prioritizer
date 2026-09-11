@@ -1,8 +1,14 @@
 import { Leaf } from "lucide-react";
-import type { DeliveryMetadata, PresetDefinition, PresetId } from "../data/types";
+import type {
+  DeliveryMetadata,
+  PresetDefinition,
+  PresetId,
+  ShortlistItem,
+} from "../data/types";
 import { MapDisplayControls } from "./MapDisplayControls";
 import { PresetSelector } from "./PresetSelector";
 import { ScoreLegend } from "./ScoreLegend";
+import { TopCandidates } from "./TopCandidates";
 
 interface SidebarProps {
   metadata: DeliveryMetadata;
@@ -13,6 +19,10 @@ interface SidebarProps {
   onPresetChange: (preset: PresetId) => void;
   onPriorityChange: (visible: boolean) => void;
   onBoundariesChange: (visible: boolean) => void;
+  shortlist?: ShortlistItem[];
+  shortlistStatus: "loading" | "ready" | "error";
+  selectedCandidateId?: string;
+  onCandidateSelect: (candidate: ShortlistItem) => void;
 }
 
 export function Sidebar({
@@ -24,6 +34,10 @@ export function Sidebar({
   onPresetChange,
   onPriorityChange,
   onBoundariesChange,
+  shortlist,
+  shortlistStatus,
+  selectedCandidateId,
+  onCandidateSelect,
 }: SidebarProps) {
   return (
     <aside className="sidebar" aria-label="Prioritizer controls">
@@ -44,6 +58,13 @@ export function Sidebar({
       <div className="sidebar-content">
         <PresetSelector activePreset={activePreset} presets={presets} onChange={onPresetChange} />
         <ScoreLegend />
+        <TopCandidates
+          activePreset={presets[activePreset]}
+          candidates={shortlist}
+          status={shortlistStatus}
+          selectedCandidateId={selectedCandidateId}
+          onSelect={onCandidateSelect}
+        />
         <MapDisplayControls
           priorityVisible={priorityVisible}
           boundariesVisible={boundariesVisible}

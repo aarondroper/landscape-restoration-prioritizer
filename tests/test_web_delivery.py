@@ -19,11 +19,13 @@ from restoration_prioritizer.web_delivery import (
     DELIVERY_PROPERTY_FIELDS,
     DELIVERY_SCORE_FIELDS,
     PROPERTY_DESCRIPTIONS,
+    TOP_N,
     WebDeliveryError,
     _feature_records,
     _rounding_audit,
     _validate_preset_metadata,
     assemble_delivery_frame,
+    build_candidate_shortlists,
     reconcile_ids,
     round_delivery_properties,
     serialize_geojson,
@@ -206,3 +208,88 @@ def test_source_values_reconcile_with_rounded_delivery_values() -> None:
     assert audit["unexpected_mismatch_count"] == 0
     assert audit["maximum_absolute_rounding_difference"] > 0
     assert not audit["rankings_recomputed_from_rounded_values"]
+
+
+def test_shortlists_use_full_precision_scores_before_delivery_rounding() -> None:
+    frame = _assembled()
+    frame.loc[frame["hex_id"] == "h_02", "balanced_score"] = 80.0004
+    frame.loc[frame["hex_id"] == "h_01", "balanced_score"] = 80.0003
+
+    shortlists, audit = build_candidate_shortlists(frame, top_n=2)
+
+    assert [entry["hex_id"] for entry in shortlists["balanced"]] == ["h_02", "h_01"]
+    assert [entry["balanced_score"] for entry in shortlists["balanced"]] == [80.0, 80.0]
+    assert audit["presets"]["balanced"]["ranked_from"] == "balanced_score"
+
+
+def test_shortlists_tie_break_by_hex_id_and_have_explicit_ranks() -> None:
+    frame = _assembled()
+    for preset_field in PRESET_SCORE_FIELDS.values():
+        frame[preset_field] = 42.5
+
+    shortlists, _ = build_candidate_shortlists(frame, top_n=2)
+
+    for entries in shortlists.values():
+        assert [entry["hex_id"] for entry in entries] == ["h_01", "h_02"]
+        assert [entry["rank"] for entry in entries] == [1, 2]
+
+
+def test_shortlist_values_follow_delivery_rounding_contract() -> None:
+    shortlists, _ = build_candidate_shortlists(_assembled(), top_n=2)
+    entry = next(item for item in shortlists["balanced"] if item["hex_id"] == "h_02")
+
+    assert entry["balanced_score"] == 1.123
+    assert entry["habitat_context_score"] == 1.123
+    assert entry["habitat_context_local_fraction"] == 0.12346
+    assert entry["candidate_land_area_ha"] == 10.12
+    assert entry["nearest_protected_hex_steps"] == 5
+    assert entry["boundary_edge_flag"] is False
+    assert len(f"{entry['longitude']:.6f}".split(".")[1]) == 6
+    assert len(f"{entry['latitude']:.6f}".split(".")[1]) == 6
+
+
+def test_shortlist_centroid_is_projected_then_transformed_and_in_bounds() -> None:
+    frame = _assembled()
+    shortlists, audit = build_candidate_shortlists(frame, top_n=2)
+    entry = next(item for item in shortlists["balanced"] if item["hex_id"] == "h_02")
+
+    geometry = frame.loc[frame["hex_id"] == "h_02", "geometry"].iloc[0]
+    expected = gpd.GeoSeries([geometry.centroid], crs="EPSG:3006").to_crs("EPSG:4326").iloc[0]
+    assert (entry["longitude"], entry["latitude"]) == (
+        round(expected.x, 6),
+        round(expected.y, 6),
+    )
+    assert audit["centroid_source_crs"] == "EPSG:3006"
+    assert audit["centroid_output_crs"] == "EPSG:4326"
+    assert audit["presets"]["balanced"]["coordinates_within_skane_bounds"]
+
+
+def test_shortlists_include_only_finalized_presets_and_reconcile_ids() -> None:
+    frame = _assembled()
+    shortlists, _ = build_candidate_shortlists(frame, top_n=2)
+
+    assert set(shortlists) == {"balanced", "connectivity_first", "riparian_restoration"}
+    candidate_ids = set(frame["hex_id"])
+    for entries in shortlists.values():
+        assert len(entries) == 2
+        assert {entry["hex_id"] for entry in entries} <= candidate_ids
+        assert all(np.isfinite([entry["longitude"], entry["latitude"]]).all() for entry in entries)
+
+
+def test_shortlist_generation_is_deterministic() -> None:
+    first, first_audit = build_candidate_shortlists(_assembled(), top_n=2)
+    second, second_audit = build_candidate_shortlists(_assembled(), top_n=2)
+
+    assert first == second
+    assert first_audit == second_audit
+
+
+def test_default_shortlist_top_n_is_exactly_fifty() -> None:
+    frame = pd.concat([_assembled()] * 25, ignore_index=True)
+    frame["hex_id"] = [f"h_{index:03d}" for index in range(len(frame))]
+    shortlists, _ = build_candidate_shortlists(frame, top_n=TOP_N)
+
+    assert TOP_N == 50
+    for entries in shortlists.values():
+        assert len(entries) == TOP_N
+        assert [entry["rank"] for entry in entries] == list(range(1, TOP_N + 1))

@@ -3,20 +3,27 @@ import { CandidateDetails } from "./components/CandidateDetails";
 import { Sidebar } from "./components/Sidebar";
 import { loadDeliveryMetadata } from "./data/metadata";
 import { loadPresets } from "./data/presets";
+import { loadCandidateShortlists } from "./data/shortlists";
 import type {
   CandidateProperties,
   DeliveryMetadata,
   PresetDefinition,
   PresetId,
+  ShortlistItem,
 } from "./data/types";
 import { CandidateMap } from "./map/CandidateMap";
 import "./styles.css";
+
+type FocusRequest = Pick<ShortlistItem, "hex_id" | "longitude" | "latitude">;
 
 export default function App() {
   const [metadata, setMetadata] = useState<DeliveryMetadata>();
   const [presets, setPresets] = useState<Record<PresetId, PresetDefinition>>();
   const [activePreset, setActivePreset] = useState<PresetId>("balanced");
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateProperties>();
+  const [shortlists, setShortlists] = useState<Record<PresetId, ShortlistItem[]>>();
+  const [shortlistStatus, setShortlistStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [focusRequest, setFocusRequest] = useState<FocusRequest>();
   const [priorityVisible, setPriorityVisible] = useState(true);
   const [boundariesVisible, setBoundariesVisible] = useState(true);
   const [error, setError] = useState<string>();
@@ -32,8 +39,26 @@ export default function App() {
       });
   }, []);
 
+  useEffect(() => {
+    loadCandidateShortlists()
+      .then((loaded) => {
+        setShortlists(loaded.presets);
+        setShortlistStatus("ready");
+      })
+      .catch(() => setShortlistStatus("error"));
+  }, []);
+
   const handleSelect = useCallback((candidate: CandidateProperties) => {
     setSelectedCandidate(candidate);
+  }, []);
+
+  const handleShortlistSelect = useCallback((candidate: ShortlistItem) => {
+    setSelectedCandidate(candidate);
+    setFocusRequest({
+      hex_id: candidate.hex_id,
+      longitude: candidate.longitude,
+      latitude: candidate.latitude,
+    });
   }, []);
 
   const activePresetMetadata = presets?.[activePreset];
@@ -54,6 +79,10 @@ export default function App() {
             onPresetChange={setActivePreset}
             onPriorityChange={setPriorityVisible}
             onBoundariesChange={setBoundariesVisible}
+            shortlist={shortlists?.[activePreset]}
+            shortlistStatus={shortlistStatus}
+            selectedCandidateId={selectedCandidate?.hex_id}
+            onCandidateSelect={handleShortlistSelect}
           />
           <section className="map-stage" aria-label="Restoration opportunity map">
             <CandidateMap
@@ -63,6 +92,7 @@ export default function App() {
               priorityVisible={priorityVisible}
               boundariesVisible={boundariesVisible}
               onSelect={handleSelect}
+              focusRequest={focusRequest}
             />
             {!selectedCandidate ? (
               <div className="map-hint">Select a candidate hexagon to inspect its restoration profile.</div>

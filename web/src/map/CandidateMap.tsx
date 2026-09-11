@@ -11,7 +11,7 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import { parseCandidateProperties } from "../data/candidateProperties";
 import { PRESET_SCORE_FIELDS } from "../data/types";
-import type { CandidateProperties, DeliveryMetadata, PresetId } from "../data/types";
+import type { CandidateProperties, DeliveryMetadata, PresetId, ShortlistItem } from "../data/types";
 import {
   candidateBoundaryLayer,
   candidateFillLayer,
@@ -46,6 +46,7 @@ interface CandidateMapProps {
   priorityVisible: boolean;
   boundariesVisible: boolean;
   onSelect: (candidate: CandidateProperties) => void;
+  focusRequest?: Pick<ShortlistItem, "hex_id" | "longitude" | "latitude">;
 }
 
 function bboxFromMetadata(metadata: DeliveryMetadata): [[number, number], [number, number]] {
@@ -63,6 +64,7 @@ export function CandidateMap({
   priorityVisible,
   boundariesVisible,
   onSelect,
+  focusRequest,
 }: CandidateMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -71,6 +73,7 @@ export function CandidateMap({
   const activePresetRef = useRef(activePreset);
   const priorityVisibleRef = useRef(priorityVisible);
   const boundariesVisibleRef = useRef(boundariesVisible);
+  const focusRequestRef = useRef(focusRequest);
   const [mapError, setMapError] = useState<string>();
 
   useEffect(() => {
@@ -82,6 +85,10 @@ export function CandidateMap({
     priorityVisibleRef.current = priorityVisible;
     boundariesVisibleRef.current = boundariesVisible;
   }, [activePreset, boundariesVisible, priorityVisible]);
+
+  useEffect(() => {
+    focusRequestRef.current = focusRequest;
+  }, [focusRequest]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -165,6 +172,9 @@ export function CandidateMap({
       map.setFilter(CANDIDATE_SELECTED_FILL_LAYER_ID, selectedFilter);
       map.setFilter(CANDIDATE_SELECTED_HALO_LAYER_ID, selectedFilter);
       map.setFilter(CANDIDATE_SELECTED_OUTLINE_LAYER_ID, selectedFilter);
+      if (focusRequestRef.current) {
+        focusCandidate(map, focusRequestRef.current);
+      }
     };
 
     const onSourceData = (event: MapSourceDataEvent) => {
@@ -222,6 +232,12 @@ export function CandidateMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !focusRequest || !map.isStyleLoaded()) return;
+    focusCandidate(map, focusRequest);
+  }, [focusRequest]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || !map.isStyleLoaded() || !map.getLayer(CANDIDATE_FILL_LAYER_ID)) return;
     map.setPaintProperty(
       CANDIDATE_FILL_LAYER_ID,
@@ -267,4 +283,18 @@ export function CandidateMap({
       {mapError ? <div className="map-error" role="alert">Map error: {mapError}</div> : null}
     </div>
   );
+}
+
+function focusCandidate(
+  map: MapLibreMap,
+  focus: Pick<ShortlistItem, "hex_id" | "longitude" | "latitude">,
+) {
+  if (!Number.isFinite(focus.longitude) || !Number.isFinite(focus.latitude)) return;
+  map.easeTo({
+    center: [focus.longitude, focus.latitude],
+    zoom: Math.max(map.getZoom(), 11.5),
+    bearing: 0,
+    pitch: 0,
+    duration: 650,
+  });
 }

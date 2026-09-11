@@ -16,10 +16,21 @@ the same ramp and describes the values as relative model scores from 0 to 100.
 
 The left panel contains the project identity, the three approved
 prioritization presets, the active score legend, candidate priority and
-candidate-boundary visibility controls, and the screening-scale model note.
+candidate-boundary visibility controls, a compact Top Candidates screening
+shortlist, and the screening-scale model note. The shortlist shows the top
+five entries for the active preset and is backed by the static top-50 delivery
+companion; it is not a second ranking or filtering model.
 Preset metadata and weights are loaded from `/data/presets.json`. Switching a
 preset updates the MapLibre fill paint expression and selected candidate score
 without refetching GeoJSON or recomputing scores in the browser.
+
+Each shortlist row is a keyboard-accessible button showing rank, the active
+preset score, and the analysis-unit ID. Selecting a row uses the same selected
+candidate state and inspector as a map click, then centers the map with a
+restrained 650 ms `easeTo` at zoom 11.5 or the current closer zoom. Changing
+the preset changes the shortlist immediately but preserves the current
+selection and camera. The shortlist is screening/ranking support, not a
+recommendation guarantee.
 
 Clicking a candidate opens the selected-area inspector and applies a persistent
 selected fill plus a two-layer outline: a wider warm off-white halo beneath a
@@ -49,7 +60,7 @@ outcomes, terrain quality, stream proximity, or habitat-block connection.
 The application presents only the existing candidate GeoJSON properties and
 the approved preset metadata. It does not show protected-area polygons,
 rivers/streams, land-cover layers, terrain, hillshade, imagery, place search,
-filters, rankings, exports, or other mock-up placeholders. `hex_id` is called
+filters, full ranking browsers, exports, or other mock-up placeholders. `hex_id` is called
 an analysis unit and the geometry is treated as a deterministic 500 m hexagon,
 not an H3 cell or parcel.
 
@@ -65,6 +76,6 @@ inspection of map rendering, hover, click, and responsive behavior remains a
 local user-review step. Development and production-preview HTTP smoke checks,
 the frontend build gates, and the backend gates remain the automated checks.
 
-Deferred features include search/geocoding, ranking, advanced filters,
+Deferred features include search/geocoding, advanced filters,
 exporting, URL/share state, methodology UI, additional environmental layers,
 PMTiles, APIs, PostGIS, deployment, and a full mobile redesign.
