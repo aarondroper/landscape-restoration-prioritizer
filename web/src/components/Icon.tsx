@@ -8,7 +8,7 @@ export type IconName =
   | "component-protected.svg"
   | "component-availability.svg"
   | "top-candidates.svg"
-  | "selected-area.svg";
+  | "map-layers.svg";
 
 interface IconProps extends Omit<ComponentProps<"img">, "src" | "alt"> {
   name: IconName;

@@ -1,6 +1,6 @@
 import * as Tabs from "@radix-ui/react-tabs";
 import { X } from "lucide-react";
-import type { ActivePresetId, CandidateProperties, PresetDefinition, WeightVector } from "../data/types";
+import type { ActivePresetId, CandidateProperties, WeightVector } from "../data/types";
 import { explainCandidate } from "../lib/candidateExplanation";
 import {
   formatHectares,
@@ -13,12 +13,10 @@ import {
 import { activeCandidateScore } from "../lib/weighting";
 import { getScoreColor, getScoreTextColor } from "../lib/scoreScale";
 import { ComponentScores } from "./ComponentScores";
-import { Icon } from "./Icon";
 
 interface CandidateDetailsProps {
   candidate: CandidateProperties;
   activePreset: ActivePresetId;
-  preset: PresetDefinition;
   weights: WeightVector;
   onClose: () => void;
 }
@@ -32,28 +30,31 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function CandidateDetails({ candidate, activePreset, preset, weights, onClose }: CandidateDetailsProps) {
+export function CandidateDetails({ candidate, activePreset, weights, onClose }: CandidateDetailsProps) {
   const explanations = explainCandidate(candidate);
   const score = activeCandidateScore(candidate, activePreset, weights);
   return (
     <aside className="details-panel" aria-label="Selected candidate details">
       <div className="details-header">
-        <div>
-          <span className="eyebrow"><Icon className="section-icon" name="selected-area.svg" aria-hidden="true" />Selected area</span>
-          <p className="detail-title">Analysis unit</p>
-          <h2>{formatAnalysisUnitId(candidate.hex_id)}</h2>
-        </div>
+        <span className="eyebrow">Selected area</span>
         <button className="icon-button" type="button" onClick={onClose} aria-label="Close selected area">
           <X size={18} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </div>
-      <div
-        className="selected-score"
-        style={{ backgroundColor: getScoreColor(score), color: getScoreTextColor(score) }}
-      >
-        <span>Relative model score</span>
-        <strong>{formatScore(score)}</strong>
-        <small>{activePreset === "custom" ? "Custom" : preset.name} · screening-scale decision support</small>
+      <div className="selected-summary">
+        <div className="selected-summary-copy">
+          <p className="detail-title">Analysis unit</p>
+          <h2>{formatAnalysisUnitId(candidate.hex_id)}</h2>
+        </div>
+        <div
+          role="group"
+          className="selected-score"
+          aria-label={`Overall score ${formatScore(score)}`}
+          style={{ backgroundColor: getScoreColor(score), color: getScoreTextColor(score) }}
+        >
+          <span>Overall Score</span>
+          <strong>{formatScore(score)}</strong>
+        </div>
       </div>
 
       <Tabs.Root className="detail-tabs" defaultValue="overview">

@@ -23,6 +23,8 @@ env/
 .vscode/
 .DS_Store
 Thumbs.db
+*.Zone.Identifier
+*:Zone.Identifier
 
 # Large or generated geospatial artifacts
 *.fgb

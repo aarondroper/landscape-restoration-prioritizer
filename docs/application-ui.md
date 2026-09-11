@@ -114,7 +114,6 @@ slots. The exact replacement filenames are:
 - `component-protected.svg`
 - `component-availability.svg`
 - `top-candidates.svg`
-- `selected-area.svg`
 
 Replace any placeholder by overwriting the corresponding SVG; no React code
 needs to change. Prefer a square `viewBox` such as `0 0 24 24`, a transparent

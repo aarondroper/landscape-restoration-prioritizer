@@ -229,7 +229,6 @@ export default function App() {
             <CandidateDetails
               candidate={selectedCandidate}
               activePreset={activePreset}
-              preset={activePresetDefinition}
               weights={normalizeWeights(rawWeights)}
               onClose={() => setSelectedCandidate(undefined)}
             />

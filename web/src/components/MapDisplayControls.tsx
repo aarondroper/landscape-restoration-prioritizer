@@ -1,9 +1,9 @@
-import { Layers3 } from "lucide-react";
 import {
   CONTEXT_LAYER_COLORS,
   type ContextLayerId,
   type ContextLayerStatuses,
 } from "../map/contextualLayers";
+import { Icon } from "./Icon";
 import { ScoreLegend } from "./ScoreLegend";
 
 interface MapDisplayControlsProps {
@@ -71,9 +71,9 @@ export function MapDisplayControls({
     <section className="sidebar-section map-layers" aria-labelledby="map-layers-title">
       <div className="section-heading-row">
         <h2 id="map-layers-title" className="section-label">
+          <Icon className="section-icon" name="map-layers.svg" aria-hidden="true" />
           Map layers
         </h2>
-        <Layers3 size={15} strokeWidth={1.7} aria-hidden="true" />
       </div>
       <label className="checkbox-row">
         <input
