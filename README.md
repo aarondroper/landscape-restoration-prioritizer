@@ -88,3 +88,9 @@ More detail is available in the [methodology](docs/methodology.md),
 [application notes](docs/application-ui.md), and
 
 [deployment notes](docs/deployment.md).
+
+## License
+
+Code in this repository is available under the MIT License.
+Source datasets retain their respective licenses and terms; see
+[docs/data-sources.md](docs/data-sources.md).
