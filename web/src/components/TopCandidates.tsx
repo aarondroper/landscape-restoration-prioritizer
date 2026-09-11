@@ -1,6 +1,5 @@
 import type { ActivePresetId, DeliveryMetadata, PresetDefinition, ShortlistItem, WeightIndexItem } from "../data/types";
-import { formatScore } from "../lib/formatting";
-import { formatAnalysisUnitId } from "../lib/formatting";
+import { formatAnalysisUnitId, formatScore } from "../lib/formatting";
 import { Icon } from "./Icon";
 
 export interface TopCandidate {

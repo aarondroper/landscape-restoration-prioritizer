@@ -300,7 +300,7 @@ def _accumulate_counts(
 def _load_semantic_audit(audit_path: Path) -> dict[str, Any]:
     if not audit_path.exists():
         raise AnalysisUnitsError(
-            f"Missing Step 5 semantic audit: {audit_path}; run "
+            f"Missing NMD semantic audit: {audit_path}; run "
             "python -m restoration_prioritizer.nmd_semantics first"
         )
     try:
@@ -325,7 +325,7 @@ def _expected_audit_totals(audit: dict[str, Any]) -> dict[str, int]:
             "sea_pixels": int(factual_summary[SEA]["pixel_count"]),
         }
     except (KeyError, TypeError, ValueError) as exc:
-        raise AnalysisUnitsError("Step 5 semantic audit has an unexpected schema") from exc
+        raise AnalysisUnitsError("NMD semantic audit has an unexpected schema") from exc
 
 
 def _reconcile_totals(

@@ -92,7 +92,7 @@ def test_display_area_reconciles_with_approved_moderate_variant(
     frame = gpd.read_file(path)
     projected = frame.to_crs("EPSG:3006")
     area_m2 = float(projected.geometry.area.sum())
-    # These authoritative areas are the Step 31 10 m masks.  A small tolerance
+    # These authoritative areas are the 10 m source masks. A small tolerance
     # allows only delivery rounding/serialization differences, not retuning.
     authoritative_area_m2 = 466_976_600.0 if "protected" in path.name else 1_012_207_000.0
     assert area_m2 / authoritative_area_m2 == pytest.approx(expected_ratio, abs=0.00001)

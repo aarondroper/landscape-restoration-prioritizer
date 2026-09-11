@@ -442,7 +442,9 @@ def build_ecological_network_score(
         habitat_raw = pd.read_csv(habitat_context_raw_path)
         habitat_score = pd.read_csv(habitat_context_score_path)
     except (OSError, ValueError) as exc:
-        raise EcologicalNetworkScoreError(f"Could not read Step 12 input artifact: {exc}") from exc
+        raise EcologicalNetworkScoreError(
+            f"Could not read ecological-network input artifact: {exc}"
+        ) from exc
 
     validate_raw_indicators(raw, expected_candidate_count=len(candidates))
     reconciliation = validate_candidate_reconciliation(raw, candidates)
@@ -539,7 +541,7 @@ def build_ecological_network_score(
         if key != "percentile_or_rank_transformation_used"
     ]
     if not all(positive_checks) or validation["percentile_or_rank_transformation_used"]:
-        raise EcologicalNetworkScoreError(f"Step 12 validation failed: {validation}")
+        raise EcologicalNetworkScoreError(f"Ecological-network validation failed: {validation}")
 
     boundary = joined[BOUNDARY_FLAG]
     distribution = {
@@ -560,7 +562,7 @@ def build_ecological_network_score(
     }
     provenance: dict[str, Any] = {
         "component_name": "Ecological Network Context",
-        "status": "IMPLEMENTED FOR MVP",
+        "status": "canonical production artifact",
         "source": {
             "raw_indicator_path": str(raw_indicator_path),
             "candidate_source_path": str(candidate_units_path),
@@ -701,7 +703,7 @@ def main() -> None:
     print(
         f"Provenance: {provenance['provenance_output']['path']} ({provenance['provenance_output']['size_bytes']:,} bytes)"
     )
-    print("Status: IMPLEMENTED FOR MVP")
+    print("Status: canonical production artifact")
 
 
 if __name__ == "__main__":

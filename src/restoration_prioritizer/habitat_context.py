@@ -1,7 +1,7 @@
-"""Calculate raw Habitat Context indicators for the Step 7 candidates.
+"""Calculate raw Habitat Context indicators for candidate units.
 
 The candidate layer is the focal population, while all surrounding composition
-comes from the complete Step 6 terrestrial analysis grid.  The regular grid
+comes from the complete terrestrial analysis grid. The regular grid
 allows exact integer axial-neighborhood lookup without polygon buffering or
 spatial joins.  This module deliberately stops at raw indicators and audit
 diagnostics; it does not normalize, score, or combine them.
@@ -66,7 +66,7 @@ OUTPUT_COLUMNS = (
 
 
 class HabitatContextError(ValueError):
-    """Raised when the Step 6/7 input contract is malformed."""
+    """Raised when the input contract is malformed."""
 
 
 def axial_distance(first: tuple[int, int], second: tuple[int, int] = (0, 0)) -> int:

@@ -85,7 +85,7 @@ const sourceHash = await sha256(candidateBytes);
 
 if (candidateBytes.byteLength >= maxPagesAssetBytes) {
   throw new Error(
-    `Candidate GeoJSON is ${candidateBytes.byteLength} bytes; Cloudflare Pages static assets must remain below ${maxPagesAssetBytes} bytes (25 MiB). Reduce the artifact only through an approved delivery-contract review.`,
+    `Candidate GeoJSON is ${candidateBytes.byteLength} bytes; Cloudflare Pages static assets must remain below ${maxPagesAssetBytes} bytes (25 MiB). Reduce the artifact only through a delivery-contract review.`,
   );
 }
 

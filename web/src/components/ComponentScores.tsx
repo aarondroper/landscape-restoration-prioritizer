@@ -13,7 +13,7 @@ export function ComponentScores({ candidate, weights }: ComponentScoresProps) {
       {COMPONENTS.map((component) => {
         const score = candidate[component.field];
         return (
-          <div className="component-score" key={component.field}>
+          <div key={component.field}>
             <div className="component-header">
               <div>
                 <div className="component-label">{component.label}</div>

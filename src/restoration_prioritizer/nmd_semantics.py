@@ -27,7 +27,7 @@ NMD_STUDY_AREA_LAYER = "study_area"
 NMD_SEMANTIC_AUDIT_PATH = Path("data/processed/nmd/nmd2023_v2_1_semantic_audit.json")
 PIXEL_AREA_KM2 = 10 * 10 / 1_000_000
 
-# These are the codes observed in the processed Skåne raster during Step 4.
+# These are the codes observed in the processed Skåne raster during source validation.
 # They are deliberately explicit: an unobserved or newly introduced code must
 # fail the audit until its semantic interpretation is reviewed.
 EXPECTED_OBSERVED_CODES = frozenset(
@@ -142,8 +142,8 @@ FACTUAL_GROUP_CODES: dict[str, frozenset[int]] = {
     OPEN_VEGETATED: frozenset({4211, 4212, 4213, 4221, 4222, 4223, 4231, 4232, 4233}),
 }
 
-# These names are the supplied NMD VAT legend names recorded during Step 4.
-# The official code-0 VAT name is blank; Step 4 separately verified it as the
+# These names are the supplied NMD VAT legend names recorded during source validation.
+# The official code-0 VAT name is blank; source validation verified it as the
 # no-data entry, so it remains None rather than receiving an invented label.
 NMD_CLASS_NAMES: dict[int, str | None] = {
     0: None,

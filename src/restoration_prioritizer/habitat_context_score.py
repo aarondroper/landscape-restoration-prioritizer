@@ -336,7 +336,7 @@ def build_habitat_context_score(
     _write_csv(scored, output_path)
     provenance: dict[str, Any] = {
         "component_name": "Habitat Context",
-        "status": "IMPLEMENTED FOR MVP",
+        "status": "canonical production artifact",
         "source": {
             "raw_indicator_path": str(raw_indicator_path),
             "candidate_units_path": str(candidate_units_path),
@@ -349,7 +349,7 @@ def build_habitat_context_score(
             "method": "empirical percentile / average rank",
             "formula": "100 * (average ascending rank - 1) / (N - 1)",
             "ties": "average rank; equal raw values receive identical scores",
-            "eligible_population_definition": "the validated Step 8 candidate population",
+            "eligible_population_definition": "the validated candidate population",
         },
         "candidate_population_validation": {
             **reconciliation,
@@ -376,7 +376,7 @@ def build_habitat_context_score(
         },
         "diagnostic_indicators": {
             "immediate_indicator_field": IMMEDIATE_DIAGNOSTIC,
-            "immediate_indicator_role": "retained from Step 8 for diagnostic/audit use only",
+            "immediate_indicator_role": "retained for diagnostic use only",
             "local_indicator_is_sole_score_input": True,
             "focal_cell_habitat_fraction_added": False,
         },

@@ -1,9 +1,8 @@
-"""Build the approved display-only contextual map layers.
+"""Build display-only contextual map layers.
 
-These artifacts are deliberately separate from the analytical model.  The
-source masks use the same finalized NMD roles and protected-area semantics as
-the Step 31 feasibility audit, then apply the approved moderate display rules
-for a static EPSG:4326 GeoJSON delivery asset.
+These artifacts are deliberately separate from the analytical model. The
+source masks use the same NMD roles and protected-area semantics as the scoring
+pipeline, then apply moderate display rules for static EPSG:4326 GeoJSON assets.
 """
 
 from __future__ import annotations
@@ -67,7 +66,7 @@ TERRESTRIAL_PROTECTED_CODES = frozenset(
 
 
 class ContextualLayerError(ValueError):
-    """Raised when an approved contextual display artifact cannot be built."""
+    """Raised when a contextual display artifact cannot be built."""
 
 
 def _clean_geometry(geometry: Any) -> Any:
@@ -303,7 +302,7 @@ def build_contextual_layers(
     protected_output_path: Path = PROTECTED_AREAS_OUTPUT_PATH,
     wetland_output_path: Path = WETLAND_INLAND_WATER_OUTPUT_PATH,
 ) -> dict[str, Any]:
-    """Generate both approved contextual display artifacts deterministically."""
+    """Generate both contextual display artifacts deterministically."""
 
     protected = _build_layer(
         "protected-areas",

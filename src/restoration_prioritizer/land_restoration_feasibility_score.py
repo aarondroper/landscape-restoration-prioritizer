@@ -146,7 +146,7 @@ def _normalise_boundary_flags(values: pd.Series) -> pd.Series:
 
 
 def validate_raw_indicators(indicators: pd.DataFrame) -> None:
-    """Validate the Step 19 raw artifact, including all supporting fields."""
+    """Validate the raw artifact, including all supporting fields."""
 
     if not isinstance(indicators, pd.DataFrame):
         raise RestorationLandAvailabilityError("Raw input must be a DataFrame")
@@ -704,7 +704,7 @@ def build_restoration_land_availability_score(
     provenance: dict[str, Any] = {
         "component_name": "Restoration Land Availability",
         "historical_component_name": "Land-Restoration Feasibility",
-        "status": "IMPLEMENTED FOR MVP",
+        "status": "canonical production artifact",
         "interpretation": "relative amount of mapped eligible arable land available within each 500 m analysis unit",
         "not_claimed": [
             "full implementation feasibility",
@@ -732,7 +732,7 @@ def build_restoration_land_availability_score(
         "selected_raw_input": {
             "field": SCORING_INPUT,
             "sole_scoring_input": True,
-            "definition": "hectares of NMD class 3 arable land already retained by the approved candidate eligibility rule",
+            "definition": "hectares of NMD class 3 arable land retained by the candidate eligibility rule",
             "conversion": "candidate_area_m2 / 10,000",
             "direction": "higher is better",
         },
@@ -760,7 +760,7 @@ def build_restoration_land_availability_score(
             ],
             "why_empirical_percentile": [
                 "candidate eligibility already imposes an absolute minimum of at least 5 ha",
-                "all observations are plausible screening candidates within the approved population",
+                "all observations are plausible screening candidates within the retained population",
                 "relative ranking distinguishes available land without claiming linear feasibility between hectares",
                 "the ranking creates the common 0–100 decision-support scale",
                 "hectares remain available for direct interpretation alongside the score",

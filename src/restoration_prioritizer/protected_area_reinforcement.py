@@ -1,8 +1,8 @@
 """Derive raw terrestrial Protected-Area Reinforcement indicators.
 
-Step 17 deliberately keeps the approved protected-area footprint as source
-geometry.  Its analytical support is the pixel-center intersection of that
-footprint with the approved NMD ``terrestrial_land`` role.  The module stops
+The protected-area footprint remains source geometry. Its analytical support is
+the pixel-center intersection of that
+footprint with the NMD ``terrestrial_land`` role. The module stops
 at raw focal/context/proximity diagnostics: it does not choose a scale,
 normalize, score, or calculate overall prioritization.
 """
@@ -88,13 +88,13 @@ OUTPUT_COLUMNS = (
 
 
 class ProtectedAreaReinforcementError(ValueError):
-    """Raised when the Step 17 source or analytical contract is malformed."""
+    """Raised when the source or analytical contract is malformed."""
 
 
 def protected_terrestrial_mask(
     codes: np.ndarray | list[int], protected_mask: np.ndarray | list[bool]
 ) -> np.ndarray:
-    """Return pixels that are both formally protected and approved terrestrial land."""
+    """Return pixels that are both formally protected and terrestrial land."""
 
     values = np.asarray(codes)
     protected = np.asarray(protected_mask, dtype=bool)
@@ -133,7 +133,7 @@ def _read_footprint(path: Path) -> Any:
         raise ProtectedAreaReinforcementError(f"Protected footprint CRS is {footprint.crs}")
     if len(footprint) != 1:
         raise ProtectedAreaReinforcementError(
-            f"Protected footprint must remain the one-feature Step 16 layer; found {len(footprint)}"
+            f"Protected footprint must remain the one-feature source layer; found {len(footprint)}"
         )
     geometry = footprint.geometry.iloc[0]
     if geometry.is_empty or not geometry.is_valid:
@@ -169,7 +169,7 @@ def _coordinate_pairs(frame: pd.DataFrame | gpd.GeoDataFrame) -> set[tuple[int, 
 def reconcile_terrestrial_counts(
     derived_grid: pd.DataFrame, analysis_units: pd.DataFrame
 ) -> dict[str, Any]:
-    """Compare derived terrestrial counts to every Step 6 terrestrial position."""
+    """Compare derived terrestrial counts to every terrestrial grid position."""
 
     required = {"grid_col", "grid_row", "terrestrial_pixels"}
     for label, frame in (("derived grid", derived_grid), ("analysis units", analysis_units)):
@@ -860,7 +860,7 @@ def build_protected_area_reinforcement(
     grid_output_path: Path = GRID_OUTPUT_PATH,
     provenance_path: Path = PROVENANCE_PATH,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Build the raw Step 17 candidate table, grid support, and audit manifest."""
+    """Build the raw candidate table, grid support, and audit manifest."""
 
     start = time.perf_counter()
     footprint = _read_footprint(footprint_path)
@@ -870,7 +870,7 @@ def build_protected_area_reinforcement(
         raise ProtectedAreaReinforcementError("Candidate layer is empty or has duplicate IDs")
     if len(candidates) != 26_395:
         raise ProtectedAreaReinforcementError(
-            f"Unexpected candidate population {len(candidates)}; expected approved 26,395"
+            f"Unexpected candidate population {len(candidates)}; expected 26,395"
         )
     terrestrial_grid, grid_audit = aggregate_protected_terrestrial_grid(
         raster_path, footprint_path, study_area_path
@@ -878,7 +878,7 @@ def build_protected_area_reinforcement(
     reconciliation = reconcile_terrestrial_counts(terrestrial_grid, analysis_units)
     if not reconciliation["matches_exactly"]:
         raise ProtectedAreaReinforcementError(
-            f"Step 6 terrestrial reconciliation failed: {reconciliation['position_mismatch_count']} position mismatches, "
+            f"Terrestrial-grid reconciliation failed: {reconciliation['position_mismatch_count']} position mismatches, "
             f"delta={reconciliation['delta_pixels']}"
         )
     sources = {
@@ -1084,7 +1084,7 @@ def build_protected_area_reinforcement(
             "candidate_units_path": str(candidate_units_path),
         },
         "protected_terrestrial_definition": {
-            "definition": "NMD pixel center inside unified approved protected_footprint AND NMD code in terrestrial_land role",
+            "definition": "NMD pixel center inside unified protected_footprint AND NMD code in terrestrial_land role",
             "terrestrial_role": TERRESTRIAL_LAND,
             "excluded": ["code 0/no-data", "inland water code 61", "sea code 62"],
             "artificial_land": "included as terrestrial_land",
@@ -1094,7 +1094,7 @@ def build_protected_area_reinforcement(
         "rasterization_and_grid": {
             "pixel_center_rule": True,
             "all_touched": False,
-            "pixel_assignment": "Reuse analysis_units.pixel_centers_to_grid_indices for deterministic Step 6 pointy-top axial assignment",
+            "pixel_assignment": "Reuse analysis_units.pixel_centers_to_grid_indices for deterministic pointy-top axial assignment",
             "grid_convention": "500 m flat-to-flat, fixed origin (0,0), h_<grid_col>_<grid_row>",
             "aggregation": "raw pixel counts first, then fraction; no averaging per-cell fractions",
             "water_only_positions": "not durable in terrestrial grid; omitted positions contribute no denominator",
@@ -1167,7 +1167,7 @@ def build_protected_area_reinforcement(
         "scale_contrast_examples": _scale_contrast_examples(joined),
         "boundary_diagnostics": boundary_diagnostics,
         "spatial_sanity": spatial_sanity,
-        "marine_distortion_note": "Raw Step 16 geometry distance includes marine/inland-water protected geometry; this is diagnostic only and is not a selected final metric.",
+        "marine_distortion_note": "Raw source-geometry distance includes marine/inland-water protected geometry; this is diagnostic only and is not a final metric.",
         "caveats": [
             "Formal protection does not equal habitat quality.",
             "Candidate overlap with protected land is not automatically positive or negative.",
@@ -1176,7 +1176,7 @@ def build_protected_area_reinforcement(
             "Nearest hex-step distance is geometric grid proximity, not ecological connectivity.",
             "NMD terrestrial classification defines the analytical land mask.",
             "Cross-county terrestrial protected context outside the NMD Skåne raster is not represented in this derived terrestrial grid.",
-            "No final focal, adjacent, local, distance, normalization, score, or weighting method is selected in Step 17.",
+            "No final focal, adjacent, local, distance, normalization, score, or weighting method is selected in this raw indicator artifact.",
         ],
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime_seconds": time.perf_counter() - start,
@@ -1202,7 +1202,7 @@ def build_protected_area_reinforcement(
 
 
 def main() -> None:
-    """Generate and summarize the real-data raw Step 17 artifact."""
+    """Generate and summarize the real-data raw artifact."""
 
     indicators, provenance = build_protected_area_reinforcement()
     grid = provenance["grid_audit"]
@@ -1216,7 +1216,7 @@ def main() -> None:
         f"protected-terrestrial pixels {protected_pixels:,} ({protected_pixels * PIXEL_AREA_M2 / 1_000_000:.3f} km²)"
     )
     print(
-        f"Step 6 reconciliation exact: {grid['terrestrial_reconciliation']['matches_exactly']}; "
+        f"Terrestrial-grid reconciliation exact: {grid['terrestrial_reconciliation']['matches_exactly']}; "
         f"nearest-step median {provenance['nearest_protected_grid_distance_distribution']['steps']['median']}"
     )
     print(f"Runtime: {provenance['runtime_seconds']:.2f} seconds")

@@ -1,8 +1,8 @@
 """Calculate raw Riparian Opportunity context indicators from NMD2023.
 
 The module deliberately stops at raw, pixel-weighted hydrologic-context
-fractions.  It includes inland-water-only grid positions that are absent from
-the durable Step 6 terrestrial analysis-unit layer, but it does not alter
+fractions. It includes inland-water-only grid positions that are absent from
+the durable terrestrial analysis-unit layer, but it does not alter
 candidate eligibility or select a scored riparian input.
 """
 
@@ -140,7 +140,7 @@ class RiparianOpportunityError(ValueError):
 
 
 def hydrologic_counts_from_codes(codes: np.ndarray | list[int]) -> dict[str, int]:
-    """Summarize one categorical NMD sample using the approved semantics."""
+    """Summarize one categorical NMD sample using the defined semantics."""
 
     array = np.asarray(codes)
     factual = factual_group_masks(array)
@@ -1211,7 +1211,7 @@ def build_riparian_opportunity(
             "wetland_context_pixels",
             "inland_water_pixels",
         ),
-        "Step 6 analysis units",
+        "analysis units",
     )
     step6_grid = step6_units[
         [
@@ -1275,7 +1275,7 @@ def build_riparian_opportunity(
         ),
     }
     boundary_diagnostics = {
-        "definition": "Candidate centroid within 1,000 m of the dissolved Skåne study-area boundary; reused Step 8 rule.",
+        "definition": "Candidate centroid within 1,000 m of the dissolved Skåne study-area boundary.",
         "threshold_m": BOUNDARY_EDGE_DISTANCE_M,
         "candidate_count": int(len(joined)),
         "edge_count": int(joined["boundary_edge_flag"].sum()),
@@ -1471,7 +1471,7 @@ def build_riparian_opportunity(
             "These are hydrologic land-cover context indicators, not functional hydrology, flood risk, water quality, stream order, catchment function, groundwater, connectivity, buffer suitability, or feasibility.",
             "NMD inland water and wetland are adequate for the contained MVP context audit but are not equivalent to a detailed hydrographic dataset.",
             "The current approximately 1 km county-edge limitation remains; context outside Skåne is unseen and is not corrected here.",
-            "No final riparian scale, normalization, score, weights, or overall restoration score is selected in Step 14.",
+            "No final riparian scale, normalization, score, weights, or overall restoration score is selected here.",
         ],
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime_seconds": time.perf_counter() - start,

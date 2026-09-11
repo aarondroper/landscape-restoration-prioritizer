@@ -1,10 +1,10 @@
 """Finalize the Protected-Area Reinforcement component for the MVP.
 
-The sole scoring input is ``nearest_protected_hex_steps`` from the Step 17
-terrestrial raw indicator artifact.  Step-zero candidates represent focal
+The sole scoring input is ``nearest_protected_hex_steps`` from the terrestrial
+raw indicator artifact. Distance-zero candidates represent focal
 protected-terrestrial support and receive the unique maximum score of 100.
 Positive distances are ranked only among the non-overlap population using the
-approved reverse empirical transformation.  Protected fractions remain raw
+canonical reverse empirical transformation. Protected fractions remain raw
 supporting diagnostics and are never combined with the score.
 """
 
@@ -135,7 +135,7 @@ def _validated_steps(indicators: pd.DataFrame) -> np.ndarray:
 def validate_raw_indicators(
     indicators: pd.DataFrame, expected_candidate_count: int | None = None
 ) -> None:
-    """Validate the Step 17 raw input and all retained diagnostic fields."""
+    """Validate the raw input and all retained diagnostic fields."""
 
     if not isinstance(indicators, pd.DataFrame):
         raise ProtectedAreaReinforcementScoreError("Raw input must be a pandas DataFrame")
@@ -198,7 +198,7 @@ def reverse_empirical_scores(
     """Score zero overlap as 100 and rank positive steps in reverse order.
 
     For positive observations, ``r`` is the average ascending rank among the
-    positive population and ``N_pos`` is its size.  The approved formula is
+    positive population and ``N_pos`` is its size. The formula is
     ``100 * (N_pos - r + 1) / (N_pos + 1)``.  Requiring at least two positive
     observations prevents undefined or invented singleton behavior.
     """
@@ -659,14 +659,14 @@ def _top_non_overlap(joined: pd.DataFrame) -> list[dict[str, Any]]:
 def _marine_status() -> dict[str, Any]:
     if not RAW_PROVENANCE_PATH.exists():
         raise ProtectedAreaReinforcementScoreError(
-            f"Missing Step 17 provenance: {RAW_PROVENANCE_PATH}"
+            f"Missing protected-area provenance: {RAW_PROVENANCE_PATH}"
         )
     try:
         provenance = json.loads(RAW_PROVENANCE_PATH.read_text(encoding="utf-8"))
         reconciliation = provenance["focal_overlap_reconciliation"]
     except (OSError, KeyError, json.JSONDecodeError) as exc:
         raise ProtectedAreaReinforcementScoreError(
-            "Step 17 provenance lacks the raw marine-inclusive distance audit"
+            "Protected-area provenance lacks the raw marine-inclusive distance audit"
         ) from exc
     result = {
         "raw_geometry_intersections": int(reconciliation["observed_raw_geometry_intersect_count"]),
@@ -685,7 +685,7 @@ def _marine_status() -> dict[str, Any]:
         "reason": (
             "Raw legal geometry contains marine and inland-water protected portions. "
             "It yields geometry intersections without terrestrial NMD support, whereas "
-            "the approved score must describe proximity to the formally protected terrestrial "
+            "the score must describe proximity to the formally protected terrestrial "
             "network under the NMD center-based support model."
         ),
         "source_provenance_reference": str(RAW_PROVENANCE_PATH),
@@ -694,7 +694,7 @@ def _marine_status() -> dict[str, Any]:
         key: result[key] for key in result["expected_step17_values"]
     }:
         raise ProtectedAreaReinforcementScoreError(
-            "Step 17 marine-inclusive distance counts do not match the approved audit values"
+            "Marine-inclusive distance counts do not match the recorded audit values"
         )
     return result
 
@@ -846,7 +846,7 @@ def build_protected_area_reinforcement_score(
     marine_status = _marine_status()
     provenance: dict[str, Any] = {
         "component_name": "Protected-Area Reinforcement",
-        "status": "IMPLEMENTED FOR MVP",
+        "status": "canonical production artifact",
         "source": {
             "raw_indicator_source": str(raw_indicator_path),
             "candidate_source": str(candidate_units_path),
@@ -854,7 +854,7 @@ def build_protected_area_reinforcement_score(
             "step17_raw_provenance_reference": str(RAW_PROVENANCE_PATH),
             "source_network_scope": (
                 "Naturvårdsverket national parks, nature reserves, and Natura 2000 SCI, SPA, "
-                "and SPA/SCI, physically unioned in the approved protected_footprint"
+                "and SPA/SCI, physically unioned in the protected_footprint"
             ),
         },
         "selected_raw_input": {
@@ -870,7 +870,7 @@ def build_protected_area_reinforcement_score(
             "semantics": (
                 "Minimum axial hex-grid distance from the candidate grid position to any grid "
                 "position containing at least one NMD terrestrial pixel whose center lies within "
-                "the approved unified formal protected footprint. Traversal may cross water or "
+                "the unified formal protected footprint. Traversal may cross water or "
                 "non-terrestrial grid coordinates."
             ),
         },

@@ -1,87 +1,43 @@
-# Methodology contract
-
-## Purpose and study area
+# Methodology
 
 Landscape Restoration Prioritizer is a regional screening and decision-support
-tool for **Skåne län, Sweden**. Its primary client question is:
+tool for Skåne län, Sweden. It identifies candidate analysis units for further
+investigation. It does not recommend a parcel, estimate restoration success, or
+measure legal, economic, ownership, or implementation feasibility.
 
-> Where in Skåne should a conservation organization investigate
-> landscape-restoration opportunities that could strengthen ecological
-> networks, improve riparian function, and expand semi-natural habitat?
+## Study area and analysis units
 
-The tool is intended to identify areas for further investigation. It does not
-claim that a particular parcel should be restored, and it does not estimate a
-scientific probability of restoration suitability.
+The study boundary is built from SCB DeSO 2025 polygons with `lanskod=12`,
+dissolved in EPSG:3006. It is an administrative/statistical extent and may
+include territorial water. It is not itself the terrestrial candidate mask.
 
-## Analysis units and candidate land
+The canonical analytical CRS is SWEREF 99 TM (EPSG:3006), the metre-based
+Swedish projected CRS used for areas, nominal distances, and the hexagonal grid.
+The NMD2023 Basskikt v2.1 raster is a 10 m EPSG:3006 categorical raster.
 
-The Step 6 analysis unit is a regular **500 m flat-to-flat pointy-top hexagon**
-in **EPSG:3006**. Its side length is `500 / sqrt(3) = 288.6751346 m` and its
-theoretical complete area is `216,506.3509 m²` (21.6506351 ha). Every durable
-unit retains the complete regular geometry; it is not clipped to the coastline,
-administrative boundary, NMD footprint, or candidate pixels. Hexagons are
-analysis units, not parcels, and their boundaries have no ecological or legal
-meaning. They form a consistent regional screening tessellation.
+Analysis units are complete regular 500 m flat-to-flat pointy-top hexagons. Their
+theoretical area is 216,506.3509 m² (21.6506351 ha), and their side length is
+`500 / sqrt(3) = 288.6751346 m`. Hexagons are planning units, not parcels; their
+boundaries have no ecological or legal meaning.
 
-The grid is anchored mathematically at the fixed EPSG:3006 origin `(0, 0)`.
-For integer grid coordinates `(col, row)`, the center is
-`((col + row / 2) * 500 m, row * 1.5 * side)`, and the stable identifier is
-`h_<col>_<row>`. The same CRS, width, anchor, and raster extent therefore
-regenerate the same grid independently of boundary vertex ordering. The
-processed NMD raster supplies the factual spatial extent. Cells with no
-terrestrial NMD pixel are discarded from the Step 6 factual grid. Step 6 does
-not apply a candidate eligibility threshold; that separate population
-definition is specified below for Step 7.
+The grid is anchored at EPSG:3006 origin `(0, 0)`. For integer coordinates
+`(col, row)`, the center is:
 
-The candidate-land definition, including treatment of land cover and obvious
-constraints, is explicitly defined by the Step 5 NMD semantic contract below.
-It identifies pixels for later investigation; it does not establish
-restoration suitability, availability, or feasibility.
+```text
+x = (col + row / 2) * 500
+y = row * 1.5 * 288.6751346
+```
 
-The canonical analytical CRS is **SWEREF 99 TM (EPSG:3006)**, the national
-Swedish projected CRS used for metre-based distance, area, and hex-grid
-operations. The selected NMD2023 Basskikt v2.1 is a 10 m EPSG:3006 raster, so
-the primary land-cover backbone does not require an initial CRS conversion.
-Source-specific CRS conversion, raster resampling, and precision decisions
-will be documented during ingestion validation.
+The stable identifier is `h_<col>_<row>`. The grid is generated from the
+processed raster extent and retains cells containing at least one terrestrial
+NMD pixel. Pixel centers are assigned to cells; `all_touched` rasterization is
+not used. Cells are not clipped to the coast, study boundary, raster footprint,
+or candidate pixels.
 
-Step 4 validated the live NMD2023 Basskikt v2.1 delivery at the source
-contract: one EPSG:3006, 10 m, unsigned-16 raster band with PackBits TIFF
-compression. The source raster declares an all-valid GDAL mask; the supplied
-VAT legend identifies code 0 as the no-data entry and code 62 as `Hav`/sea.
-For the coverage gate, code 0 and sea pixels are excluded from the terrestrial
-NMD data footprint, while the output raster preserves the original sea code.
+## NMD semantic roles
 
-The coverage metadata layer `NV_NMD2023_version_baskartering` was read from the
-delivered GeoPackage. Its `Version` values were `Endast v0.x` and `v2.0 och
-v0.x`; Skåne intersects the latter current-v2.x extent. Against the generated
-SCB `study_area` artifact, the check found 11349.354 km² of terrestrial valid
-NMD data and no uncovered terrestrial pixels. It found 5753.0955 km² of sea
-and three code-0 no-data pixels inside the administrative/statistical extent;
-these are not treated as missing terrestrial NMD coverage. The NMD v2.1
-delivery is accepted as the primary Skåne raster source. The approved semantic
-interpretation of those classes is defined below; it is a land-cover contract,
-not a suitability or scoring model.
-
-## NMD semantic contract (Step 5)
-
-NMD supplies land-cover structure. It does not directly measure ecological
-quality, habitat condition, biodiversity, ownership, restoration cost, actual
-restoration feasibility, or conservation consent/legal availability. The
-application therefore uses careful factual and analytical labels such as
-candidate land, habitat-context proxy, wetland context, and artificial
-constraint. A candidate pixel is a location for later investigation, not a
-claim that restoration is appropriate or available.
-
-The primary restoration-candidate definition for MVP v1 is exactly NMD class 3
-(`Åkermark`, arable agricultural land). This is deliberately limited to
-clearly human-managed land cover where conversion/restoration investigation is
-conceptually plausible. Existing forest, wetlands, open vegetated land,
-temporarily non-forest areas, artificial land, water, and sea are not primary
-candidate land. Peat extraction (class 54, `Torvtäkt`) is tracked as a separate
-factual group and is not silently added to the candidate mask.
-
-The source-controlled factual groups are mutually exclusive:
+NMD classes are land-cover observations. The following factual groups are
+mutually exclusive:
 
 | Factual group | NMD codes |
 | --- | --- |
@@ -101,186 +57,82 @@ The source-controlled factual groups are mutually exclusive:
 | `open_nonvegetated` | 411 |
 | `open_vegetated` | 4211–4213, 4221–4223, 4231–4233 |
 
-The analytical roles are derived from those groups and can overlap:
+The analytical roles are derived from those groups and may overlap:
 
-- `primary_candidate`: exactly `arable` / code 3.
+- `primary_candidate`: arable class 3 only.
 - `habitat_context_proxy`: established forest on firm ground, established
-  forest on wetland, open wetland, and open vegetated land. This is a
-  structural land-cover proxy, not a claim of semi-natural habitat, high
-  quality, or biodiversity. In particular, NMD forest classes do not establish
-  forest naturalness or management intensity.
+  forest on wetland, open wetland, and open vegetated land.
 - `wetland_context`: established forest on wetland, transitional forest on
-  wetland, and open wetland. Class 128 is wetland context, but not established
-  habitat context.
-- `inland_water_context`: exactly class 61. Sea / marine class 62 is outside
-  the MVP riparian role and current model.
-- `artificial_constraint`: classes 51–53. Peat extraction remains separate.
-- `transitional_forest`: classes 118 and 128 as a factual supporting role only;
-  neither is assigned a favorable or unfavorable score.
-- `terrestrial_land`: all valid land-cover groups except no-data, inland water,
-  and sea. Artificial surfaces remain terrestrial land even though they are
-  constraints.
+  wetland, and open wetland.
+- `inland_water_context`: class 61 only; sea is excluded.
+- `artificial_constraint`: classes 51–53.
+- `transitional_forest`: classes 118 and 128 as factual supporting fields.
+- `terrestrial_land`: every valid group except no-data, inland water, and sea.
 
-No mutually exclusive analysis-class raster is created. Future operations can
-derive the required masks directly from the compact categorical raster. Exact
-spatial indicators, neighborhood definitions, connectivity, normalization,
-weights, and scoring remain deferred.
+These roles are proxies for mapped context. They do not establish naturalness,
+habitat quality, biodiversity, ownership, cost, or restoration feasibility.
 
-Step 6 measures factual in-cell NMD composition before any later spatial
-context scoring. NMD pixel centers are assigned to exactly one hexagon; the
-`all_touched` rule is not used. `terrestrial_fraction` is terrestrial pixel
-area divided by the complete hex area. Candidate and habitat-context
-fractions use terrestrial pixels as their denominator, which preserves the
-distinction between coastal/water composition and land composition. These
-fractions are descriptive land-cover measurements, not eligibility scores.
+## Candidate population
 
-## MVP candidate analysis-unit eligibility (Step 7)
-
-The **primary candidate pixel** is exactly NMD class 3 arable land
-(`Åkermark`). This is a pixel-level land-cover definition from the Step 5
-semantic contract.
-
-The **eligible candidate analysis unit** is a complete regular 500 m
-flat-to-flat hexagon from the Step 6 factual grid satisfying both inclusive
-conditions:
+The candidate population consists of complete grid cells satisfying both
+inclusive conditions:
 
 ```text
 candidate_area_m2 >= 50,000
 candidate_fraction_of_terrestrial >= 0.25
 ```
 
-Equivalently, the unit contains at least **5 ha of arable land**, and arable
-land comprises at least **25% of its terrestrial NMD pixels**. This explicit,
-pragmatic MVP rule defines the population to be ranked. It is a screening-domain
-definition, not a suitability score, ecological minimum, scientifically
-optimized threshold, restoration-feasibility claim, or claim that a retained
-unit is actually restorable.
+Candidate pixels are exactly NMD class 3 arable land. The rule is equivalent to
+at least 5 ha of arable land and at least 25% arable land among the unit's
+terrestrial NMD pixels. It defines the population to rank; it is not a
+suitability threshold or a claim that a retained cell is restorable.
 
-The rule has no additional eligibility conditions. In particular, no
-terrestrial-coverage threshold is applied, and mixed habitat, wetland, inland
-water, sea, or artificial context does not by itself exclude a hexagon. Those
-factual composition fields are retained for later analysis. The complete
-regular hex geometry is retained rather than clipped to arable pixels. Later
-component indicators will differentiate candidate units based on surrounding
-landscape context.
+## Neighborhood conventions
 
-## Raw Habitat Context indicators (Step 8)
+The six directly adjacent cells are the first ring. The local neighborhood is
+all 18 cells with hex distance 1 or 2. The focal cell is excluded from
+surrounding indicators. Surrounding fractions aggregate pixel counts before
+division, rather than averaging cell fractions.
 
-The Habitat Context component begins with two **raw indicators** for every
-eligible candidate analysis unit. They use the Step 5 `habitat_context_proxy`
-role exactly as defined above: established forest on firm ground, established
-forest on wetland, open wetland, and open vegetated land. This is a structural
-land-cover proxy. It does not measure biodiversity, habitat quality, ecological
-condition, forest naturalness, species occurrence, legal protection, or
-restoration success probability.
+For Habitat Context, Riparian Opportunity, and protected-terrestrial support,
+missing or water-only cells contribute no denominator. For Ecological Network
+Context, a missing first-ring position contributes habitat fraction zero and is
+counted as missing. These conventions preserve the distinction between missing
+terrestrial support and zero observed context.
 
-The candidate unit is the focal cell and is excluded from both surrounding
-calculations. The immediate indicator aggregates habitat-context and
-terrestrial NMD pixels over the six directly adjacent hex positions (hex
-distance exactly 1). The local indicator aggregates the same quantities over
-all 18 positions with `1 <= hex distance <= 2`: the six first-ring positions
-and twelve second-ring positions. The local neighborhood is the regular
-hex-grid convention, not a Euclidean circle or polygon buffer. The nominal
-center separations are approximately 500 m for the first ring and
-approximately 0.9–1.0 km for the second ring depending on direction; these are
-analytical scales, not exact ecological influence distances.
+Candidates near the dissolved study boundary retain a diagnostic
+`boundary_edge_flag`. They remain in the population and are not penalized or
+imputed with cross-county data.
 
-For each indicator, the denominator is terrestrial NMD pixels in available
-surrounding analysis-grid cells. Sea, inland water, and no-data are not
-denominator land. An expected grid position absent from the durable analysis
-grid is omitted rather than treated as zero terrestrial habitat. The output
-also records how many terrestrial analysis-grid cells were present in each
-neighborhood and preserves missing fractions if a neighborhood has zero
-terrestrial pixels.
+## Model components
 
-Using integer grid neighborhoods instead of arbitrary circular buffers makes
-the calculation deterministic, aligned with the analytical tessellation, and
-computationally simple. The full `analysis_units.gpkg` grid supplies context;
-`candidate_units.gpkg` supplies only the focal population, so a noncandidate
-surrounding cell can contribute habitat context.
+### Habitat Context
 
-These indicators remain **RAW**. No 0–100 normalization, component score,
-weight, or overall restoration score is defined in Step 8. The current NMD and
-analysis-unit artifacts stop at the Skåne study boundary, so context just
-across the Halland or Blekinge county boundary is invisible. Step 8 measures
-that potential study-boundary truncation with a diagnostic edge zone but does
-not exclude or alter edge candidates and does not add cross-border data.
-
-## Habitat Context component score (Step 9)
-
-The finalized MVP Habitat Context component uses the two-ring
-`habitat_context_local_fraction` as its **sole scoring input**. It is the raw
-terrestrial habitat-context proxy fraction across the 18 surrounding grid
-positions within two hex steps. The one-ring
-`habitat_context_adjacent_fraction` remains available in the Step 8 raw
-artifact as a supporting diagnostic only. The two raw indicators were highly
-correlated (approximately 0.95 Spearman correlation), so using both would
-unnecessarily double-count the same habitat-context signal. The broader local
-metric is retained as the transparent MVP landscape-context convention; this
-does not claim that its scale is ecologically optimal. Focal-cell habitat
-fraction is not added separately.
-
-For the eligible candidate population, the component uses empirical percentile
-ranking with higher raw context treated as better. For `N` valid observations,
-the ascending average rank is transformed as:
+Habitat Context measures the amount of surrounding mapped habitat-context proxy.
+For each candidate, the sole scored input is the pixel-weighted fraction of
+habitat-context proxy among terrestrial pixels in the 18 surrounding cells:
 
 ```text
-habitat_context_score = 100 * (average rank - 1) / (N - 1)
+habitat_context_local_fraction =
+    surrounding_habitat_context_pixels /
+    surrounding_terrestrial_pixels
 ```
 
-The lowest observation receives 0 and the highest receives 100. Equal raw
-values receive their average rank and therefore the same continuous 0–100
-score. This relative transformation puts a component with its own units and
-distribution on a transparent decision-support scale, is robust to extreme
-raw values, preserves ordering, and avoids unsupported ecological thresholds.
-It is a choice for this component; it does not require every future component
-to use percentile scoring.
+The first-ring fraction is retained as a supporting diagnostic. The scored
+input is converted to a population-relative 0–100 score using ascending average
+ranks among valid candidates:
 
-A score such as 90 means approximately that the candidate ranks around the
-90th percentile for the local surrounding habitat-context proxy among eligible
-candidates. It does not mean 90% habitat quality, restoration suitability,
-probability of success, or habitat coverage. The raw local fraction remains the
-direct measure of surrounding habitat-cover proportion.
+```text
+habitat_context_score = 100 * (average_rank - 1) / (N - 1)
+```
 
-The output is one row per eligible candidate in deterministic `hex_id` order
-with `hex_id`, `habitat_context_local_fraction`, `habitat_context_score`, and
-the transparent `boundary_edge_flag`. Candidates within the approximately
-1 km study-boundary edge zone remain in the ranking. County-boundary
-truncation affects approximately 0.31% of candidates and is accepted as an
-MVP limitation: no cross-county context correction or imputation is applied.
-The edge flag is not used to exclude or penalize candidates. No weights or
-overall restoration-opportunity score are defined here.
+The lowest value is 0, the highest is 100, and tied values receive the same
+average-rank score.
 
-The study-area identifiers are county/län code **12** and NUTS 3 code
-**SE224**. The reproducible boundary source is SCB DeSO 2025: select
-`lanskod=12` from the anonymous WFS and dissolve the returned polygons.
-The resulting artifact is an administrative/statistical study extent used to
-locate Skåne, not a terrestrial land boundary: the DeSO 2025 revision is
-complete to the territorial-water boundary and may include marine territory.
-Marine areas, inland water, built land, and other unsuitable areas remain for
-later NMD-based candidate-land logic and are not removed here.
+### Ecological Network Context
 
-## Raw Ecological Network Context indicators (Step 10)
-
-Habitat Context measures the **amount** of the Step 5 structural
-`habitat_context_proxy` surrounding a candidate. Ecological Network Context is
-intended to measure a meaningfully different property: the **arrangement** of
-that surrounding habitat composition around the candidate. It asks whether a
-candidate is positioned between habitat concentrations in a way that
-restoration could plausibly strengthen landscape continuity across the
-candidate. This is a landscape-structure proxy, not a validated ecological
-corridor model.
-
-The calculation uses the immediate six-cell hex neighborhood from the full
-Step 6 analysis grid. Candidate units provide the focal population only;
-surrounding cells do not need to be eligible candidates. For each present
-neighbor, the factual composition is the continuous value
-`habitat_context_fraction_of_terrestrial`, equivalent to
-`habitat_context_pixels / terrestrial_pixels`. No habitat-rich-cell threshold,
-patch vectorization, or connected-component network is created. The focal
-cell's own composition is excluded.
-
-The six first-ring offsets form three opposing axes of the projected hex grid:
+Ecological Network Context measures opposing-side arrangement of the same
+habitat-context proxy in the six first-ring cells. The three grid axes are:
 
 | Axis | Opposite offsets |
 | --- | --- |
@@ -288,736 +140,142 @@ The six first-ring offsets form three opposing axes of the projected hex grid:
 | `axis_b` | `(0, -1)` and `(0, 1)` |
 | `axis_c` | `(-1, 1)` and `(1, -1)` |
 
-These are grid axes and are not described as exact east-west, north-south, or
-other compass directions. Each raw axis bridge strength is the minimum of the
-two habitat fractions on its opposing sides:
-
-```text
-axis_bridge_strength = min(side_1_habitat_fraction, side_2_habitat_fraction)
-```
-
-The minimum is intentional: habitat on only one side cannot produce a strong
-opposing-side bridge signal. Two raw indicators are retained for review:
-
-- `bridge_strength_max` — the strongest of the three opposing-axis strengths.
-- `bridge_strength_mean` — the mean of the three opposing-axis strengths.
-
-Neither indicator has yet been selected as the final Ecological Network
-Context component input, normalized to 0–100, scored, or combined with another
-indicator. The output also records the selected strongest axis, its tie count,
-the number of missing adjacent grid positions, and the existing
-`boundary_edge_flag`.
-
-For this bridging calculation, a neighboring grid position absent from the
-full analysis grid is assigned habitat fraction zero and counted as missing.
-This differs intentionally from Habitat Context's denominator treatment.
-Missing positions may reflect non-terrestrial cells or truncation at the
-current Skåne source/study domain; no cross-county value is imputed, and edge
-candidates are not excluded or penalized.
-
-This indicator is not a species-connectivity or movement model. It applies no
-habitat-quality weighting, patch-size threshold, resistance surface, or
-species-specific dispersal distance. Its axis geometry is imposed by the
-500 m analysis grid, and cross-county context remains a known limitation.
-
-The Step 10 audit found that the absolute bridge-strength indicators remained
-strongly related to Habitat Context: approximately 0.87–0.90 Spearman
-correlation across the tested bridge summaries. This is expected because both
-measures depend strongly on the amount of surrounding habitat. Accordingly,
-`bridge_strength_max` and `bridge_strength_mean` are retained as useful raw
-diagnostics but are not accepted as an independent scored component input.
-
-## Final Ecological Network Context component (Step 12)
-
-Step 11 makes one contained attempt to separate immediate habitat amount from
-its opposing-side arrangement. It uses exactly the same six first-ring
-habitat fractions and missing-neighbor convention as Step 10. For each
-candidate, let `a1`, `a2`, `b1`, `b2`, `c1`, and `c2` be the habitat-context
-fractions at the three opposing axis pairs. A missing analysis-grid position
-contributes zero. The candidate's focal-cell fraction is excluded.
-
-The diagnostic total is the unweighted sum of the six per-cell fractions:
-
-```text
-total_neighbor_habitat = a1 + a2 + b1 + b2 + c1 + c2
-neighbor_habitat_mean = total_neighbor_habitat / 6
-```
-
-This total is distinct from Step 8's pixel-weighted adjacent habitat fraction.
-The existing Step 10 axis strengths remain:
+For each axis, the matched strength is the minimum of the two opposing habitat
+fractions:
 
 ```text
 m_a = min(a1, a2)
 m_b = min(b1, b2)
 m_c = min(c1, c2)
+total_neighbor_habitat = a1 + a2 + b1 + b2 + c1 + c2
 ```
 
-Two raw configuration-normalized indicators are added:
+The scored input is the bounded configuration ratio:
 
 ```text
-opposing_balance_ratio = 2 * (m_a + m_b + m_c) / total_neighbor_habitat
-dominant_opposing_pair_share = 2 * max(m_a, m_b, m_c) / total_neighbor_habitat
+opposing_balance_ratio =
+    2 * (m_a + m_b + m_c) / total_neighbor_habitat
 ```
 
-When `total_neighbor_habitat == 0`, both ratios are defined as exactly zero.
-The formulas therefore describe arrangement relative to the immediate habitat
-amount. The first asks how much immediate habitat has matching habitat on an
-opposing axis. The second asks how much is organized around one dominant
-matched opposing pair. Both have a mathematical range of 0–1, and the
-dominant-pair share cannot exceed the overall opposing-balance ratio.
-
-These pure configuration ratios can be high when the absolute surrounding
-habitat amount is small. Step 11 does not add an arbitrary minimum-habitat
-threshold; its real-data audit reports the neighborhood-habitat support in the
-top 10%, 5%, and 1% tails, distributions within Habitat Context score bands,
-within-quartile correlations, contrasts at similar Habitat Context scores, and
-boundary sensitivity. Six individual neighbor-fraction columns are not
-persisted because the aggregate diagnostics and provenance provide the
-downstream audit information needed here.
-
-The Step 10 absolute bridge metrics were too redundant with Habitat Context for
-the final score. The configuration normalization substantially reduces that
-redundancy while retaining a direct structural interpretation. The
-`dominant_opposing_pair_share` diagnostic is rejected because high values were
-too easily produced by trivial low-habitat opposing pairs and disproportionately
-rewarded concentration into one axis. Both rejected bridge summaries and this
-dominant-pair diagnostic remain in the raw indicator artifact for analytical
-provenance; none contributes to the component score.
-
-The finalized MVP input is solely:
-
-```text
-opposing_balance_ratio
-```
-
-It is scored by direct bounded scaling:
+When the total is zero, the ratio is zero. The component score is direct
+bounded scaling:
 
 ```text
 ecological_network_score = 100 * opposing_balance_ratio
 ```
 
-No percentile ranking is used. Habitat Context raw values measure habitat
-amount and do not have a natural decision-support score scale, so empirical
-percentile ranking is appropriate there. Ecological Network Context is already
-a normalized structural ratio with fixed bounds 0 and 1 and a direct
-interpretation between them. Multiplication by 100 preserves that meaning;
-percentile ranking would instead express population-relative standing.
-Components need not share a transformation merely for superficial consistency.
+This is a structural proxy imposed by the hex grid, not a species movement,
+corridor, resistance, or habitat-quality model.
 
-Under this specific proxy, a score of 80 means approximately that 80% of the
-immediate habitat amount around the candidate is matched by habitat on the
-opposite side of its corresponding hex-grid axes. It does not mean 80%
-ecological connectivity, corridor quality, movement probability, habitat
-quality, or restoration suitability. This remains a transparent structural
-landscape-configuration proxy, not a validated ecological-connectivity metric.
+### Riparian Opportunity
 
-Network Context measures configuration while Habitat Context separately
-captures surrounding habitat amount. No minimum habitat-amount support
-threshold, multiplier, penalty, or nonlinear adjustment is imposed; high
-Network Context with low Habitat Context is retained as an informative
-diagnostic rather than corrected. The metric is imposed by the 500 m hex-grid
-geometry and is structural rather than functional or species-specific. Missing
-neighbors at the county edge are retained as an MVP limitation and are not
-imputed or used to exclude candidates. The component is **IMPLEMENTED FOR
-MVP**.
-
-## Riparian Opportunity (Steps 13–15)
-
-Riparian Opportunity is a raw hydrological/riparian landscape-context
-component for eligible agricultural candidate hexagons. It asks approximately:
-
-> How strongly is this agricultural restoration candidate associated with
-> inland-water and wetland context at the focal and surrounding landscape
-> scales?
-
-The source is NMD2023 v2.1 only. The approved Step 5 semantic contract is
-reused without modification. `wetland_context` consists of established forest
-wetland classes 121–127, transitional forest wetland class 128, and open
-wetland classes 200, 211–218, and 221–228. `inland_water_context` is exactly
-class 61. The hydrologic union is:
+Riparian Opportunity uses NMD wetland context and inland water. The hydrologic
+numerator and non-marine denominator are:
 
 ```text
 hydrologic_context_pixels = wetland_context_pixels + inland_water_pixels
-```
-
-These factual roles are mutually exclusive, so wetland and inland water are
-not double-counted. Sea / class 62, code 0/no-data, artificial surfaces,
-general firm-ground forest, and arable land itself are not added as hydrologic
-context.
-
-The denominator is the non-marine mapped landscape:
-
-```text
 nonmarine_context_pixels = terrestrial_land_pixels + inland_water_pixels
 ```
 
-Wetland pixels are already part of terrestrial land; inland water is not. Sea
-and no-data are excluded. Consequently, an inland-water-only NMD grid position
-has a raw hydrologic fraction of 1, while a sea-only position contributes
-neither numerator nor denominator.
+Wetland is already part of terrestrial land. Inland water is added to the
+denominator; sea and no-data are excluded. The focal candidate fraction is the
+sole scored input. Adjacent, near, and local fractions remain supporting fields.
 
-The NMD raster is aggregated directly using the deterministic Step 6 pixel
-center-to-grid assignment convention, reusing the existing pure
-`pixel_centers_to_grid_indices` helper. This is component-specific contextual
-processing; the durable Step 6 `analysis_units.gpkg` is not changed and
-water-only cells are not reintroduced into candidate eligibility. The compact
-aggregation includes terrestrial, mixed land/water, inland-water-only, and
-sea-only valid positions needed for context.
-
-Four raw scales are audited:
-
-- the focal candidate hex;
-- the six adjacent positions with hex distance exactly 1; and
-- the near signal, defined as `max(focal, adjacent)`; and
-- the 18 surrounding positions with `1 <= hex distance <= 2`.
-
-The focal cell is excluded from the adjacent and local scales. Surrounding
-scales sum raw pixel counts across their available positions first and then
-divide, rather than averaging per-cell fractions. Missing positions and
-sea-only positions contribute no numerator or denominator. A zero denominator
-is retained as missing/NaN and reported in provenance. Diagnostic wetland and
-inland-water fractions and factual presence booleans are retained for audit;
-they are not separate scores.
-
-Step 13's raw-scale audit found that the local scale is too broad and
-redundant to remain under serious final-input consideration: its rank
-correlation with the adjacent scale was approximately 0.87, hydrologic
-presence was nearly universal, and its Habitat Context rank correlation was
-approximately 0.725. Focal and adjacent remain analytically useful. Focal was
-more distinct from Habitat Context (rank correlation approximately 0.475),
-while adjacent was more redundant (approximately 0.675), but focal can be
-sensitive to the arbitrary placement of a hydrologic feature relative to a
-500 m hex boundary.
-
-Step 14 therefore adds one additional raw diagnostic signal:
+Zero focal fraction receives zero. Positive candidates are ranked among the
+positive population using ascending average ranks:
 
 ```text
-riparian_near_fraction = max(
-    riparian_focal_fraction,
-    riparian_adjacent_fraction
-)
+riparian_opportunity_score = 100 * positive_average_rank / N_positive
 ```
 
-It represents the stronger hydrologic-context signal observed either within
-the candidate hex or across its six directly adjacent hex positions. The
-maximum is intentionally unweighted and bounded in `[0, 1]`; it does not use
-an average, sum, probability/union formula, multiplication, Habitat Context
-adjustment, or distance weighting. Step 14 audits whether it reduces
-focal-only hex-boundary sensitivity and whether it becomes excessively
-redundant with finalized Habitat Context. Focal, adjacent, local, and near are
-all retained as raw/provenance indicators.
+The smallest positive observation is therefore above zero. This score is
+relative mapped hydrologic context, not water quality, flood risk, stream order,
+hydrological connectivity, or restoration suitability. The display layer is
+generalized and is not a comprehensive stream network.
 
-### Final MVP input and score
+### Protected-Area Reinforcement
 
-Step 15 finalizes `riparian_focal_fraction` as the sole Riparian Opportunity
-scoring input. It is the fraction of the candidate hex's mapped non-marine
-landscape consisting of NMD wetland context or inland water. Wetland context
-uses the Step 5 classes and inland water is class 61. The denominator is
-terrestrial land plus inland water; sea and no-data are excluded.
+The protected network is the physical union of selected national parks, nature
+reserves, and Natura 2000 SCI, SPA, or SPA/SCI polygons. A 10 m NMD pixel provides
+protected-terrestrial support when its center lies inside that union and its
+class belongs to `terrestrial_land`. The legal source geometry itself is not
+clipped for this calculation.
 
-The selected focal scale directly represents hydrologic context inside the
-candidate analysis unit and was the most distinct serious scale from finalized
-Habitat Context. Step 14 found approximate Habitat Context Spearman
-correlations of 0.475 for focal, 0.675 for adjacent, 0.636 for near, and 0.725
-for local. Focal had zero raw context for approximately 26.5% of candidates.
-The near diagnostic rescued only 266 candidates (approximately 1.0%) under the
-clear `focal <= 1%` / `adjacent >= 10%` condition, while changing empirical
-ranks materially: median absolute change was approximately 12.5 percentile
-points and approximately 20.4% moved at least 25 percentile points. The whole-
-population redundancy and rank reshuffling therefore outweighed the limited
-boundary-rescue benefit.
+The scored input is `nearest_protected_hex_steps`, the minimum axial grid-step
+distance from a candidate to a grid position containing protected-terrestrial
+support. Its `steps * 500 m` value is nominal and is not an exact polygon-edge
+or Euclidean distance.
 
-The final score uses a zero-anchored positive-population empirical percentile.
-For `x_i = riparian_focal_fraction`:
+For candidate `i`, distance-zero candidates receive 100. Positive distances are
+ranked among the non-overlap population using an ascending average rank:
 
 ```text
-if x_i == 0:
-    riparian_opportunity_score = 0
-otherwise:
-    r_i = average ascending rank among observations where x > 0
-    N_pos = count of observations where x > 0
-    riparian_opportunity_score = 100 * r_i / N_pos
+protected_area_reinforcement_score =
+    100 * (N_positive - positive_average_distance_rank_i + 1) /
+          (N_positive + 1)
 ```
 
-Average ranks give tied positive raw values identical scores. This is not
-`100 * (rank - 1) / (N_pos - 1)`: the smallest positive observation must remain
-strictly above zero so that some mapped focal hydrologic context is distinct
-from no mapped focal hydrologic context. The raw fraction is highly
-right-skewed, constrained by candidate-land composition, and reaches only
-about 0.66 in the current population. Positive-population percentile scoring
-preserves ordering, avoids arbitrary ecological thresholds, provides a usable
-common 0–100 decision-support scale, and avoids letting the observed raw
-maximum arbitrarily cap the component's effective influence. This is a
-population-relative scale, not absolute ecological quality.
+Protected focal, adjacent, and local fractions remain supporting diagnostics and
+are not combined with distance.
 
-Adjacent, near, and local remain available as supporting raw diagnostics for
-transparency, selected-area explanation, and showing immediately surrounding
-hydrologic context in the eventual UI. They do not contribute to the final
-score. No external stream dataset, detailed stream/vector hydrology, near/focal
-weighting, or Habitat Context adjustment is used. NMD may underrepresent
-narrow streams, and county-edge context is retained as an accepted MVP
-limitation rather than imputed or corrected.
+### Restoration Land Availability
 
-A Riparian Opportunity score of 90 means approximately:
-
-> Among candidate units with some focal mapped hydrologic context, this
-> candidate ranks around the 90th percentile for focal wetland/inland-water
-> share.
-
-It does not mean 90% riparian quality, 90% hydrological benefit, or 90%
-restoration suitability. Riparian Opportunity does not measure
-flood risk, water quality, stream order, catchment function, groundwater,
-hydrological connectivity, actual riparian-buffer suitability, or feasibility.
-NMD's representation of narrow streams may underrepresent them. No separate
-stream vector network is used, and NMD inland water/wetland is adequate for
-this contained MVP context audit but is not equivalent to a detailed
-hydrographic dataset.
-
-The Riparian Opportunity component is **IMPLEMENTED FOR MVP**.
-
-## Finalized MVP components
-
-Each candidate cell will retain five independently available component scores:
-
-1. **Habitat Context** — relative surrounding mapped habitat context.
-2. **Ecological Network Context** — relative opposing-side habitat
-   configuration context.
-3. **Riparian Opportunity** — relative focal mapped wetland and inland-water
-   context.
-4. **Protected-Area Reinforcement** — relative reinforcement context for
-   terrestrial formal protection.
-5. **Restoration Land Availability** — relative amount of mapped eligible
-   arable land within the analysis unit.
-
-Raw indicators will be transformed into normalized **0–100 relative component
-scores** within the study population. The final overall score will be a
-weighted mean of the five components. Component values must remain available
-alongside the overall score for interpretation and auditability.
-
-The finalized user-facing presets are **Balanced**, **Connectivity First**, and
-**Riparian Restoration**. These are predefined component-weight configurations,
-not separate analytical models; their canonical vectors are documented in the
-final MVP preset section below.
-
-The first-pass source support is deliberately limited. NMD2023 supplies the
-land-cover, broad habitat, wetland, inland-water, and restoration-land-
-availability context;
-Naturvårdsverket's `SkyddadeOmraden` and `N2000` WFS layers supply the adopted
-protected-area network; and the SCB boundary is used only as a study-area
-mask. NMD-only hydrology is accepted for the MVP, with narrow streams recorded
-as a known limitation. Slope is deferred rather than added as a feasibility
-sub-indicator. Protected-area overlaps must be physically de-duplicated before
-area-based analysis.
-
-## Scoring principles
-
-Indicator definitions, transformations, normalization choices, and weights
-must be explicit, deterministic, documented, and defensible for a regional
-screening tool. Robust or percentile-based normalization may be used where it
-is justified by the source-data distributions. Scores express relative
-decision-support opportunity within the study population; they are not
-absolute ecological value, restoration probability, or a parcel-level
-recommendation.
-
-The exact indicators and transformations for all five finalized components are
-defined in the component sections below and represented in the generated
-artifacts. The scores remain relative model scores for screening-scale
-decision support.
-
-## Current assumptions and limitations
-
-- The study area is Skåne län; its MVP boundary is derived from SCB DeSO 2025
-  polygons selected by `lanskod=12` and dissolved.
-- NMD2023 Basskikt v2.1 is the selected land-cover backbone; its complete
-  terrestrial Skåne coverage gate passed during Step 4.
-- A nominal 500 m hexagonal unit is a planning assumption, not a final
-  immutable implementation detail.
-- Candidate pixels are currently exactly NMD class 3 arable land. The
-  habitat-context proxy, wetland context, and constraint roles are analytical
-  land-cover masks, not ecological-quality or feasibility measurements.
-- Feature-distance definitions, habitat/network indicators, treatment of
-  missing data, normalization, weights, and scoring are defined in the
-  finalized component and model sections below.
-- NMD inland-water and wetland classes are the MVP riparian source. Narrow
-  streams may be underrepresented; a separate hydrographic vector source is
-  deferred because available alternatives add access/legal complexity or are
-  not openly downloadable.
-- The protected-area scope is national parks and nature reserves from
-  `SkyddadeOmraden` plus Natura 2000 `SCI`, `SPA`, and `SPA/SCI` polygons.
-- TUVA is the first optional enrichment candidate if the MVP needs a more
-  explicit surveyed semi-natural-habitat anchor than NMD provides.
-- National and regional datasets may differ in date, resolution, classification,
-  completeness, and licensing; temporal mismatch and scale effects may affect
-  comparability.
-- The screening output will require ecological review and local investigation
-  before any restoration decision.
-
-## Protected-Area Reinforcement source footprint (Step 16)
-
-The Protected-Area Reinforcement source footprint currently consists only of
-Naturvårdsverket national parks, nature reserves, and Natura 2000 `SCI`, `SPA`,
-and `SPA/SCI` polygons. Legal-designation overlaps are physically unioned so
-that the same area is represented once in the analytical footprint. The
-authoritative source geometry is preserved as polygonal geometry, including
-marine territory; no water clipping is applied at this stage.
-
-The ingestion retrieves selected features intersecting a fixed 5 km buffer
-around the SCB-derived Skåne study geometry. This outside-Skåne context exists
-only to support the finalized proximity analysis and does not expand the
-candidate study region. Step 16 records the source, geometry, overlap, and
-candidate-relationship inputs; the final indicator and scoring method are
-defined in the Protected-Area Reinforcement sections below.
-
-- No field validation, parcel-level feasibility assessment, landowner context,
-  costs, or implementation constraints are included in this initial contract.
-
-## Protected-Area Reinforcement terrestrial raw indicators (Step 17)
-
-The Step 16 protected footprint is formally authoritative but its overlap with
-the NMD study raster is marine-dominated. Raw distance to that unmodified
-marine-inclusive geometry is therefore retained only as a diagnostic and is
-not used directly as a final terrestrial restoration indicator.
-
-Step 17 derives analytical terrestrial protected support without changing the
-source GeoPackage. A 10 m NMD pixel is `protected_terrestrial` exactly when
-its pixel center is inside the unified `protected_footprint` and its NMD code
-belongs to the approved `terrestrial_land` role. Code 0/no-data, inland water
-(61), and sea (62) are excluded; artificial land remains terrestrial. The
-mask is not restricted to habitat, forest, wetland, natural, candidate, or
-non-agricultural land, so protected agricultural pixels remain eligible for
-measurement.
-
-Counts are assigned to the deterministic Step 6 500 m pointy-top axial grid
-using pixel centers and `all_touched=False`. Raw focal, six-position adjacent,
-and 18-position local protected-land fractions are pixel-weighted sums; the
-focal position is excluded from adjacent and local context, and missing or
-water-only positions contribute neither numerator nor denominator. A nearest
-protected hex-step diagnostic is propagated on the axial lattice, including
-water-only coordinates that are absent from the terrestrial support table.
-Its `steps * 500 m` nominal metre field is a scale label rather than an exact
-Euclidean polygon-edge distance.
-
-These raw representations were audited together in Step 17. The source legal
-geometries remain unchanged. The outside-Skåne 5 km source context retained in
-Step 16 remains limited here by the NMD terrestrial mask, which ends at the
-Skåne raster extent; the small cross-county candidate population is audited
-rather than solved in the raw-indicator step.
-
-## Protected-Area Reinforcement component (Step 18)
-
-Protected-Area Reinforcement is **implemented for the MVP**. Its source network
-is the approved Naturvårdsverket footprint: national parks, nature reserves,
-and Natura 2000 SCI, SPA, and SPA/SCI polygons, physically unioned to avoid
-legal-designation overlap double-counting. Step 16 showed that the raw legal
-geometry is marine-inclusive: 1,627 candidates intersected it, while only
-1,583 had terrestrial focal support. The remaining 44 raw intersections are
-marine, inland-water, sliver, or otherwise unsupported by a terrestrial NMD
-pixel center. Raw marine-inclusive vector distance is therefore rejected as a
-scoring input.
-
-Step 17's NMD-terrestrial support solution is retained. A protected support
-pixel is an NMD 10 m pixel whose center lies within the unified footprint and
-whose NMD semantic role is `terrestrial_land`; the raw legal geometry itself
-is not clipped or modified. The final raw scoring input is solely
-`nearest_protected_hex_steps`, the minimum axial distance from a candidate grid
-position to any grid position containing protected-terrestrial support.
-Traversal is geometric lattice proximity and may cross water or other omitted
-grid positions. `nearest_protected_nominal_m` is only an explanatory `steps *
-500 m` label.
-
-For candidate (i), let (d_i) be `nearest_protected_hex_steps`. The final
-score is:
+Restoration Land Availability measures the relative amount of mapped eligible
+arable land in each candidate cell. Its sole scored input is:
 
 ```text
-if d_i == 0:
-    protected_area_reinforcement_score = 100
-else:
-    protected_area_reinforcement_score =
-        100 * (N_pos - average_positive_distance_rank_i + 1) / (N_pos + 1)
+candidate_land_area_ha = candidate_area_m2 / 10,000
 ```
 
-Distance zero uniquely means that the candidate analysis unit itself contains
-some formally protected terrestrial land under the NMD center-based support
-model. For positive distances, `N_pos` is the non-overlap candidate count and
-the ascending rank uses average ranks for ties. The positive distance is
-discrete, there is no defensible MVP basis for subtracting a fixed amount for
-each additional 500 m, and no hard ecological cutoff is justified. Reverse
-empirical ranking preserves nearer-is-better ordering on a common 0–100
-decision-support scale without inventing a distance-decay curve.
-
-`protected_focal_fraction`, `protected_adjacent_fraction`, and
-`protected_local_fraction` remain raw supporting diagnostics only. They are not
-combined with distance and do not contribute mathematically to the component;
-this prevents rewarding the same formal protection network twice. They may
-support later explanations, overlap-versus-proximity distinctions, and map
-inspection.
-
-The score is population-relative among non-overlap candidates. A score of 100
-does not mean that the whole hexagon is protected, nor does a non-overlap score
-such as 80 mean 80% protected land, conservation value, protection
-likelihood, ecological quality, or restoration suitability. Grid-step distance
-is not exact Euclidean polygon-edge distance, ecological movement distance,
-least-cost distance, species connectivity, or travel distance. No 5 km source
-acquisition buffer is used as a score threshold. Cross-county terrestrial
-support outside the Skåne NMD raster remains unavailable, and formal protection
-does not imply ecological quality or restoration feasibility.
-
-## Mapped restoration-land-availability context (Step 19)
-
-The fifth component is interpreted narrowly as a **mapped restoration-land-
-availability context proxy**. It is not
-real implementation feasibility in the socioeconomic, cadastral, legal, or
-financial sense. The MVP has no ownership, land price, farmer or landowner
-willingness, agricultural yield, soil suitability, drainage infrastructure,
-subsidy commitment, lease tenure, detailed terrain constraint, or legal
-acquisition-cost data. Those questions remain outside this step.
-
-Step 19 audits five raw, uncombined primitives for every Step 7 eligible
-candidate. It reuses the generated Step 6 full analysis grid and Step 7
-candidate layer; it does not reread the NMD raster or ingest a new
-environmental dataset.
-
-- `candidate_land_area_ha` is `candidate_area_m2 / 10,000`. The source value is
-  the already approved Step 7 NMD arable candidate area, not a newly inferred
-  area.
-- `candidate_land_fraction` is the existing
-  `candidate_fraction_of_terrestrial`, preserved unchanged. It is the fraction
-  of the candidate hex's terrestrial NMD pixels classified as arable.
-- `artificial_focal_fraction` is focal
-  `artificial_constraint_pixels / terrestrial_pixels`.
-- `artificial_adjacent_fraction` is the sum of artificial-constraint pixels
-  divided by the sum of terrestrial pixels across the six first-ring positions,
-  excluding the focal cell.
-- `artificial_local_fraction` is the same pixel-weighted ratio across all 18
-  positions with `1 <= hex distance <= 2`, excluding the focal cell.
-
-The candidate/restorable-land proxy is the existing Step 5
-`primary_candidate` role: NMD class 3, arable land. The artificial/developed
-constraint proxy is the existing Step 5 `artificial_constraint` role: classes
-51 (building), 52 (other artificial surfaces), and 53 (transport). Peat
-extraction class 54, inland water, wetland, forest, open vegetation, and
-protected-area status are not artificial constraints for this component.
-Protected agricultural land is not automatically treated as infeasible, and
-habitat or wetland interspersion is not automatically treated as infeasible.
-
-Adjacent and local fractions aggregate factual pixel counts first. Missing or
-water-only positions contribute no terrestrial denominator; they are not
-converted into artificial=0 land. The `boundary_edge_flag` is retained as a
-diagnostic. The durable raw table contains no geometry, scores, combined
-formula, normalization, weights, presets, or overall prioritization score.
-
-Step 19 reports area-versus-fraction redundancy, focal/adjacent/local
-artificial-scale redundancy, relationships with all four finalized component
-scores, ecological tradeoff diagnostics, boundary/coastal and terrestrial-
-fraction sensitivity, and descriptive examples. A 500 m hex remains an
-analytical unit rather than a cadastral parcel, and 10 m NMD arable
-classification does not imply ownership, willingness, suitability, or
-implementability.
-
-## Restoration Land Availability component (Step 20)
-
-The fifth component is **implemented for the MVP** as **Restoration Land
-Availability**. The historical “Land-Restoration Feasibility” name is retained
-in the raw and component artifact paths for continuity, but its operational
-meaning is intentionally narrowed. It measures the **relative amount of mapped
-eligible arable land available within each 500 m analysis unit**. It does not
-estimate full implementation feasibility.
-
-The sole scoring input is `candidate_land_area_ha`, defined as the approved
-Step 7 `candidate_area_m2 / 10,000`. The candidate population already requires
-at least 5 ha and at least 25% terrestrial candidate fraction, so all retained
-observations are plausible screening candidates. Candidate fraction is not
-scored because Step 19 found it nearly redundant with candidate area; area has
-the direct interpretation of hectares available and avoids minor denominator
-sensitivity in coastal or partially terrestrial cells. Hectares remain in the
-component artifact beside the score.
-
-For candidate `i`, let `x_i = candidate_land_area_ha`, let `N` be the total
-eligible candidate count, and let `r_i` be the ascending average rank of `x_i`
-among all eligible candidates. The final score is:
+The score uses ascending average ranks across all eligible candidates:
 
 ```text
-restoration_land_availability_score = 100 * (r_i - 1) / (N - 1)
+restoration_land_availability_score = 100 * (average_rank - 1) / (N - 1)
 ```
 
-Equal areas receive equal scores through average-rank tie handling. Empirical
-percentile scoring distinguishes relative standing without inventing a claim
-that, for example, 20 ha is exactly twice as feasible as 10 ha, and it creates
-the common 0–100 decision-support scale. A score of 90 means the unit contains
-more mapped eligible arable land than roughly 90% of the eligible candidate
-population. It does not mean 90% of the cell is restorable, 90% implementation
-feasibility, a 90% restoration probability, 90 hectares, or 90% landowner
-willingness. If the maximum area is tied, the exact average-rank formula can
-give that tied maximum a score slightly below 100; this is expected tie
-behavior, not a jitter or a hidden rescaling.
+Artificial-context fractions are supporting diagnostics only. This component has
+no ownership, cadastral, socioeconomic, legal, cost, soil, drainage, yield, or
+landowner-consent data.
 
-Artificial burden is supporting diagnostic context only. `artificial_focal_fraction`,
-`artificial_adjacent_fraction`, and `artificial_local_fraction` are not added,
-subtracted, multiplied, thresholded, or otherwise used in the score. Candidate
-area already counts only NMD arable pixels, and NMD artificial classes 51–53
-are mutually exclusive with those candidate pixels. Penalizing candidate
-hectares again would partly double-count the mapped land-availability
-limitation; surrounding burden is also less directly connected to whether the
-mapped arable hectares themselves are available. Focal artificial burden may
-later be shown as a UI caution/context field.
+## Overall score and presets
 
-This component has no socioeconomic, ownership, cadastral, legal, acquisition,
-cost, agricultural-productivity, soil-suitability, drainage-removal, or subsidy
-data. Candidate hectares are a mapped land-availability proxy, not a claim of
-restoration suitability or permission. The four ecological components and this
-availability component remain individually reported. Their correlations and
-tradeoffs are audited descriptively, but no overall prioritization score,
-weights, presets, or classifications are defined in Step 20.
-
-## Overall model integration: Equal-weight baseline (Step 21)
-
-Step 21 integrates the five finalized MVP components without changing any
-component definition or transformation:
-
-1. Habitat Context (`habitat_context_score`)
-2. Ecological Network Context (`ecological_network_score`)
-3. Riparian Opportunity (`riparian_opportunity_score`)
-4. Protected-Area Reinforcement (`protected_area_reinforcement_score`)
-5. Restoration Land Availability (`restoration_land_availability_score`)
-
-The neutral **Equal-weight baseline** assigns exactly 20% to each component:
+The overall score is a direct weighted arithmetic mean of the five 0–100
+component scores:
 
 ```text
-balanced_score =
-    0.20 * habitat_context_score
-  + 0.20 * ecological_network_score
-  + 0.20 * riparian_opportunity_score
-  + 0.20 * protected_area_reinforcement_score
-  + 0.20 * restoration_land_availability_score
+preset_score = sum(component_score * component_weight)
 ```
 
-This is the raw weighted arithmetic mean. All five components follow the
-directional contract that higher score means a stronger contribution to
-restoration priority under that component's interpretation; Restoration Land
-Availability therefore treats more candidate hectares as higher score. No
-secondary normalization, re-ranking, clipping, standardization, percentile
-transformation, or z-scoring is applied to `balanced_score`. Because every
-input is bounded in `[0, 100]`, the baseline is also bounded in `[0, 100]`.
+The three named presets are:
 
-Equal weighting is neutral and transparent, not empirically optimized.
-Weighted averaging is compensatory: strong performance on one component can
-offset weak performance on another. Four components are ecological/context
-dimensions and one is land availability, so equal per-component weights
-nominally allocate 80% of the total to ecological/context dimensions and 20%
-to land availability. This is intentional for the historical baseline. The
-`build_balanced_baseline()` function remains available for Step 21
-reproducibility; the canonical CLI and finalized presets are defined in Step
-23 below. The detailed real-data audit and provenance are written to
-`data/processed/prioritization/balanced_baseline.provenance.json`; the durable
-candidate table is
-`data/processed/prioritization/balanced_baseline.csv` and contains no geometry
-or raw indicators.
-
-## Controlled preset sensitivity study (Step 22)
-
-Step 22 retains the Step 21 equal-weight model as the sole **Balanced**
-reference candidate:
-
-```text
-Habitat       0.20
-Network       0.20
-Riparian      0.20
-Protection    0.20
-Availability  0.20
-```
-
-It tests exactly three interpretable **Connectivity First** scenario vectors:
-
-| Scenario | Habitat | Network | Riparian | Protection | Availability |
+| Preset | Habitat | Network | Riparian | Protection | Availability |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Connectivity Mild | 0.20 | 0.25 | 0.15 | 0.25 | 0.15 |
-| Connectivity Medium | 0.20 | 0.30 | 0.10 | 0.25 | 0.15 |
-| Connectivity Strong | 0.20 | 0.35 | 0.10 | 0.25 | 0.10 |
+| Balanced | 0.20 | 0.20 | 0.20 | 0.20 | 0.20 |
+| Connectivity First | 0.20 | 0.30 | 0.10 | 0.25 | 0.15 |
+| Riparian Restoration | 0.20 | 0.10 | 0.35 | 0.15 | 0.20 |
 
-It also tests exactly three **Riparian Restoration** scenario vectors:
+These are transparent scenario weightings, not learned coefficients or
+ecological probabilities. The weighted mean is compensatory: a strong component
+can offset a weak component.
 
-| Scenario | Habitat | Network | Riparian | Protection | Availability |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Riparian Mild | 0.20 | 0.15 | 0.30 | 0.15 | 0.20 |
-| Riparian Medium | 0.20 | 0.10 | 0.35 | 0.15 | 0.20 |
-| Riparian Strong | 0.15 | 0.10 | 0.40 | 0.15 | 0.20 |
+The frontend's Custom mode accepts non-negative slider values from 0 to 100 and
+normalizes them at calculation time. It changes client-side ranking of the
+delivered component scores; it does not recalculate the analytical model.
 
-For every scenario, the result is the direct weighted arithmetic mean of the
-five finalized 0–100 component scores. No component is recalculated, inverted,
-percentile-ranked, normalized after weighting, gated, or optimized against an
-outcome. The six vectors are policy/scenario choices, not calibrated
-ecological truth. Weighted averaging remains compensatory, so one component
-can offset another. Step 22 is an analytical sensitivity study only; no final
-thematic weights are selected or persisted as user-facing presets.
+## Reproducibility and limitations
 
-The ignored analytical artifacts are
-`data/processed/prioritization/preset_sensitivity.csv` and
-`data/processed/prioritization/preset_sensitivity.provenance.json`. The
-command is:
-
-```bash
-python -m restoration_prioritizer.preset_sensitivity
-```
-
-## Final MVP preset selection and canonical model artifact (Step 23)
-
-Step 23 locks the three user-facing MVP presets. The final named vectors are
-defined canonically in `src/restoration_prioritizer/prioritization_model.py`:
-
-| Preset | Habitat | Network | Riparian | Protection | Availability | Status |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Balanced | 0.20 | 0.20 | 0.20 | 0.20 | 0.20 | FINALIZED FOR MVP |
-| Connectivity First | 0.20 | 0.30 | 0.10 | 0.25 | 0.15 | FINALIZED FOR MVP |
-| Riparian Restoration | 0.20 | 0.10 | 0.35 | 0.15 | 0.20 | FINALIZED FOR MVP |
-
-The stable machine identifiers are `balanced`, `connectivity_first`, and
-`riparian_restoration`. Balanced remains the equal-component reference because
-Step 21–22 found numerically stable behavior, transparent interpretation, a
-useful ecological/availability tradeoff, and no serious reason to replace
-equal weights. It is equal component importance, not a statistically optimized
-model.
-
-Connectivity First selects the Step 22 Connectivity Medium vector. Mild was
-too close to Balanced (Spearman approximately 0.986 and top-10 overlap about
-90%); Medium was clearly differentiated (Spearman approximately 0.961,
-top-10 overlap about 82%) while retaining acceptable availability. Strong
-provided only a modest further Network gain but reduced top-10 availability,
-increased severe-weakness cases, and increased top-100 churn. Riparian
-Restoration selects the Step 22 Riparian Medium vector. It provided a clearer
-Riparian shift than Mild while retaining similar severe-weakness behavior;
-Strong added only a modest further Riparian gain while degrading broader
-Habitat/Protection balance and increasing churn.
-
-These weights express stakeholder/scenario emphasis choices. They are not
-empirically learned coefficients, calibrated ecological truth, probabilities,
-or optimization results. All five dimensions retain positive weight in every
-preset. The final score is the direct compensatory weighted arithmetic mean:
-
-```text
-preset_score = sum(component_score * preset_component_weight)
-```
-
-No percentile ranking, scaling, clipping, z-scoring, rescaling, or hard gate is
-applied after the weighted mean. Strong variants were rejected because their
-marginal thematic gains did not justify broader tradeoffs; Mild variants were
-rejected because Medium provided clearer differentiation at acceptable cost.
-Weighted averaging therefore remains compensatory: a strong component can
-offset a weak component.
-
-The canonical command is:
+The Python pipeline validates source schemas, CRS, raster resolution, geometry,
+finite numeric values, identifier reconciliation, and deterministic ordering.
+Generated artifacts are written under ignored `data/processed/` paths. The
+canonical commands are:
 
 ```bash
 python -m restoration_prioritizer.prioritization_model
+python -m restoration_prioritizer.web_delivery
 ```
 
-It reuses the five finalized component artifacts without recalculating raw
-indicators and writes the narrow, deterministic candidate-level output
-`data/processed/prioritization/prioritization_scores.csv` with the five
-component scores, the three final preset scores, and `boundary_edge_flag`.
-The detailed real-data audit is stored in
-`data/processed/prioritization/prioritization_scores.provenance.json`; the
-optional application metadata is
-`data/processed/prioritization/presets.json`. Step 22 Mild/Medium/Strong
-columns remain historical sensitivity artifacts only. The Step 21
-`balanced_baseline.csv` generation function remains available for
-reproducibility and is not the canonical final output.
+The model is limited by the source data and regional scale. NMD classes are
+structural land-cover proxies; narrow streams may be missed; source dates,
+resolutions, and completeness differ; and cross-county context beyond the
+Skåne NMD extent is unavailable. The outputs support investigation and
+comparison, not a formal restoration decision.

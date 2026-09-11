@@ -1,7 +1,7 @@
 """Build and audit the canonical static GeoJSON web-delivery dataset.
 
 This module is deliberately a delivery adapter, not an analytical model. It
-joins the approved candidate hexagons to the canonical final score table and
+joins the candidate hexagons to the canonical final score table and
 the narrow explanatory fields already emitted by the finalized components.
 No indicators, scores, rankings, or geometries are recalculated.
 """
@@ -225,7 +225,7 @@ def assemble_delivery_frame(
     component_sources: Mapping[str, pd.DataFrame],
     expected_count: int | None = EXPECTED_CANDIDATE_COUNT,
 ) -> tuple[gpd.GeoDataFrame, dict[str, Any]]:
-    """Join the approved sources into the narrow delivery contract."""
+    """Join the source artifacts into the narrow delivery contract."""
 
     if not isinstance(candidate_units, gpd.GeoDataFrame):
         raise WebDeliveryError("Candidate geometry source must be a GeoDataFrame")

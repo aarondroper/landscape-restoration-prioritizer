@@ -2,9 +2,8 @@
 
 This module integrates the five finalized component artifacts only.  It does
 not recalculate indicators, normalize component scores, or define hard gates.
-The three final MVP preset vectors are canonical here; the historical Step 22
-sensitivity module imports the shared Balanced vector but remains the source
-of the reproducible experimental audit.
+The three named preset vectors are canonical here; the sensitivity module
+imports the shared Balanced vector for reproducible analysis.
 """
 
 from __future__ import annotations
@@ -60,7 +59,7 @@ RIPARIAN_RESTORATION_WEIGHTS = OrderedDict(
         ("restoration_land_availability_score", 0.20),
     ]
 )
-# Backwards-compatible Step 21 name.  The canonical final definitions above
+# Backwards-compatible baseline name. The canonical definitions above
 # remain the only production source of weight values.
 WEIGHTS = BALANCED_WEIGHTS
 PRESET_DEFINITIONS = OrderedDict(
@@ -1350,9 +1349,7 @@ def _final_score_bins(values: pd.Series) -> dict[str, int]:
 
 def _final_step22_reconciliation(frame: pd.DataFrame) -> dict[str, Any]:
     if not SENSITIVITY_OUTPUT_PATH.exists():
-        raise PrioritizationModelError(
-            f"Missing Step 22 sensitivity artifact: {SENSITIVITY_OUTPUT_PATH}"
-        )
+        raise PrioritizationModelError(f"Missing sensitivity artifact: {SENSITIVITY_OUTPUT_PATH}")
     reference = pd.read_csv(SENSITIVITY_OUTPUT_PATH)
     selected = {
         "balanced": "balanced_reference_score",
@@ -1360,14 +1357,12 @@ def _final_step22_reconciliation(frame: pd.DataFrame) -> dict[str, Any]:
         "riparian_restoration": "riparian_medium_score",
     }
     required = ["hex_id", BOUNDARY_FLAG, *selected.values()]
-    _require_columns(reference, required, "Step 22 sensitivity artifact")
-    reference["hex_id"] = normalize_ids(reference, "Step 22 sensitivity artifact")
+    _require_columns(reference, required, "sensitivity artifact")
+    reference["hex_id"] = normalize_ids(reference, "sensitivity artifact")
     if len(reference) != len(frame) or set(reference["hex_id"]) != set(frame["hex_id"]):
-        raise PrioritizationModelError(
-            "Step 22 sensitivity IDs do not reconcile with final candidates"
-        )
+        raise PrioritizationModelError("Sensitivity IDs do not reconcile with final candidates")
     reference[BOUNDARY_FLAG] = normalize_boundary_flags(
-        reference[BOUNDARY_FLAG], "Step 22 sensitivity boundary flags"
+        reference[BOUNDARY_FLAG], "Sensitivity boundary flags"
     )
     merged = frame[["hex_id", BOUNDARY_FLAG, *PRESET_SCORE_FIELDS.values()]].merge(
         reference[required],
@@ -1385,7 +1380,7 @@ def _final_step22_reconciliation(frame: pd.DataFrame) -> dict[str, Any]:
     boundary_mismatches = int((merged[BOUNDARY_FLAG] != merged[f"{BOUNDARY_FLAG}_step22"]).sum())
     result["boundary_flag_mismatches"] = boundary_mismatches
     if boundary_mismatches:
-        raise PrioritizationModelError("Final boundary flags do not match the Step 22 artifact")
+        raise PrioritizationModelError("Final boundary flags do not match the sensitivity artifact")
     for preset_id, step22_field in selected.items():
         final_field = PRESET_SCORE_FIELDS[preset_id]
         difference = (merged[final_field] - merged[step22_field]).abs()
@@ -1400,7 +1395,7 @@ def _final_step22_reconciliation(frame: pd.DataFrame) -> dict[str, Any]:
         }
         if mismatches:
             raise PrioritizationModelError(
-                f"Final {final_field} does not reproduce Step 22 {step22_field}"
+                f"Final {final_field} does not reproduce sensitivity field {step22_field}"
             )
     return result
 
@@ -1408,7 +1403,7 @@ def _final_step22_reconciliation(frame: pd.DataFrame) -> dict[str, Any]:
 def _read_step22_evidence() -> dict[str, Any]:
     if not SENSITIVITY_PROVENANCE_PATH.exists():
         raise PrioritizationModelError(
-            f"Missing Step 22 sensitivity provenance: {SENSITIVITY_PROVENANCE_PATH}"
+            f"Missing sensitivity provenance: {SENSITIVITY_PROVENANCE_PATH}"
         )
     data = json.loads(SENSITIVITY_PROVENANCE_PATH.read_text(encoding="utf-8"))
     comparison = data.get("preset_intensity_comparison", {})
@@ -1632,7 +1627,7 @@ def build_prioritization_model(
     rationale = {
         "balanced": {
             "selection": "Retain the equal-weight baseline unchanged.",
-            "reason": "Step 21–22 showed numerically stable behavior, no catastrophic single-component dominance, transparent interpretation, and a useful ecological/availability tradeoff; there was no serious reason to replace 20/20/20/20/20.",
+            "reason": "The component scores show stable behavior, transparent interpretation, and a useful ecological/availability tradeoff; equal weighting remains the Balanced reference.",
             "interpretation": "equal component importance; not statistically optimized",
         },
         "connectivity_first": {
@@ -1650,8 +1645,8 @@ def build_prioritization_model(
     provenance: dict[str, Any] = {
         "project_name": "Landscape Restoration Prioritizer",
         "model_name": "Canonical three-preset MVP prioritization model",
-        "step": "Step 23 final MVP preset selection and canonical model artifact",
-        "model_status": "FINALIZED FOR MVP",
+        "step": "Canonical preset selection and model artifact",
+        "model_status": "canonical production artifact",
         "input_components": {
             label: {
                 "artifact_path": str(config["path"]),
@@ -1670,7 +1665,7 @@ def build_prioritization_model(
                 "weights": {field: float(value) for field, value in config["weights"].items()},
                 "weight_sum": math.fsum(config["weights"].values()),
                 "all_weights_positive": all(value > 0 for value in config["weights"].values()),
-                "status": "FINALIZED FOR MVP",
+                "status": "canonical production artifact",
             }
             for preset_id, config in PRESET_DEFINITIONS.items()
         },
@@ -1680,7 +1675,7 @@ def build_prioritization_model(
                 "name": config["name"],
                 "weights": {field: float(value) for field, value in config["weights"].items()},
                 "purpose": config["purpose"],
-                "status": "FINALIZED FOR MVP",
+                "status": "canonical production artifact",
             }
             for preset_id, config in PRESET_DEFINITIONS.items()
         ],

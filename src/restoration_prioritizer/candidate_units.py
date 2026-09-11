@@ -1,7 +1,7 @@
 """Materialize the fixed MVP candidate analysis-unit population.
 
-Step 6 provides the factual full terrestrial analysis-unit grid. This module
-derives a separate candidate population using exactly two inclusive conditions:
+The full analysis-unit grid provides the factual terrestrial population. This
+module derives a separate candidate population using exactly two inclusive conditions:
 at least 50,000 m² of NMD class-3 arable land and at least 25% arable land of
 the unit's terrestrial NMD pixels. It deliberately stops before context
 indicators, normalization, or prioritization.
@@ -86,7 +86,7 @@ AREA_FIELDS = (
 
 
 class CandidateUnitsError(ValueError):
-    """Raised when the Step 6 analysis-unit input is malformed."""
+    """Raised when the analysis-unit input is malformed."""
 
 
 def _require_fields(units: gpd.GeoDataFrame) -> None:
@@ -140,7 +140,7 @@ def _validate_numeric_fields(units: gpd.GeoDataFrame) -> None:
 
 
 def validate_analysis_units(units: gpd.GeoDataFrame) -> None:
-    """Validate the Step 6 schema, CRS, geometry, and factual attributes."""
+    """Validate the analysis-unit schema, CRS, geometry, and factual attributes."""
 
     if not isinstance(units, gpd.GeoDataFrame):
         raise CandidateUnitsError("Analysis-unit input must be a GeoDataFrame")
@@ -238,7 +238,7 @@ def _spatial_sanity(candidate_units: gpd.GeoDataFrame) -> dict[str, Any]:
 def calculate_diagnostics(
     units: gpd.GeoDataFrame, eligible: np.ndarray | None = None
 ) -> dict[str, Any]:
-    """Calculate the Step 7 population, accounting, and distribution diagnostics."""
+    """Calculate population, accounting, and distribution diagnostics."""
 
     validate_analysis_units(units)
     if eligible is None:
@@ -394,14 +394,12 @@ def build_candidate_units(
     try:
         source_units = gpd.read_file(source_path, layer=SOURCE_LAYER)
     except (OSError, ValueError) as exc:
-        raise CandidateUnitsError(
-            f"Could not read Step 6 analysis units: {source_path}: {exc}"
-        ) from exc
+        raise CandidateUnitsError(f"Could not read analysis units: {source_path}: {exc}") from exc
     validate_analysis_units(source_units)
     eligible = eligibility_mask(source_units)
     candidate_units = source_units.loc[eligible].copy().reset_index(drop=True)
     if candidate_units.empty:
-        raise CandidateUnitsError("The approved eligibility rule produced no candidate units")
+        raise CandidateUnitsError("The eligibility rule produced no candidate units")
     validate_analysis_units(candidate_units)
     if not np.all(eligibility_mask(candidate_units)):
         raise CandidateUnitsError("Retained candidate units do not all satisfy both conditions")

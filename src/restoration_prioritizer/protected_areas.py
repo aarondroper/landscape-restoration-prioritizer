@@ -1,4 +1,4 @@
-"""Ingest and normalize the approved Naturvårdsverket protected-area network.
+"""Ingest and normalize the selected Naturvårdsverket protected-area network.
 
 This module deliberately stops at a factual source/geometry foundation. It
 does not calculate a Protected-Area Reinforcement score, choose a distance
@@ -542,7 +542,7 @@ def filter_national_records(source: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 
 def filter_natura_records(source: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Select all approved SCI, SPA, and combined SPA/SCI site records."""
+    """Select all eligible SCI, SPA, and combined SPA/SCI site records."""
 
     selected = source.loc[source["OMRADESTYP"].isin(NATURA_DESIGNATIONS)].copy()
     if selected.empty:
@@ -614,7 +614,7 @@ def _validate_normalized(
 def union_protected_geometries(
     national: gpd.GeoDataFrame, natura: gpd.GeoDataFrame
 ) -> tuple[Any, dict[str, float]]:
-    """Union approved physical areas and return overlap/deduplication areas."""
+    """Union selected physical areas and return overlap/deduplication areas."""
 
     national_union = union_all(national.geometry.array)
     natura_union = union_all(natura.geometry.array)
@@ -979,7 +979,7 @@ def run_ingestion(
             "acquisition_buffer_m": CONTEXT_BUFFER_M,
             "context_bounds_epsg_3006": list(context_bounds),
             "bbox_final_local_filter": "Server BBOX uses EPSG:3006 northing,easting axis order; local exact intersects(buffered study geometry) is authoritative",
-            "attribute_filter_strategy": "No server-side attribute filter; live CQL/FES impossible-value probes were ignored by both services; approved designation/status filters are local",
+            "attribute_filter_strategy": "No server-side attribute filter; live CQL/FES impossible-value probes were ignored by both services; designation/status filters are local",
             "national": {
                 "request_parameters": national_fetch.request_parameters,
                 "page_count": national_fetch.page_count,

@@ -1,124 +1,90 @@
 # Landscape Restoration Prioritizer
 
-A reproducible Skåne landscape-restoration screening model combining environmental geospatial analysis with an interactive decision-support application.
+A landscape-restoration screening tool for Skåne, Sweden. It combines land-cover, protected-area, and other environmental data to help identify places worth investigating for restoration.
 
-## What it does
-
-The client question is:
-
-> Where should a conservation organization investigate restoration opportunities first, and why?
-
-The model works at regional screening scale across **Skåne, Sweden**. It helps compare candidate analysis units; it does not make parcel recommendations, estimate probability, or establish implementation feasibility.
-
-## Application
-
-The React + MapLibre application supports three finalized scenarios:
-
-- **Balanced**
-- **Connectivity First**
-- **Riparian Restoration**
-
-Users can inspect the regional candidate surface, discover the top five candidates for the active scenario, navigate directly to a candidate, and inspect why its relative score has the value shown. Scores are population-relative model scores for screening-scale decision support.
+The question behind the project is simple: **where should a conservation organization investigate restoration opportunities first, and why?**
 
 ## Live demo
 
-[Open the deployed application](https://landscape-restoration-prioritizer.pages.dev/)
+[Open the application](https://landscape-restoration-prioritizer.pages.dev/)
 
-## Model
+## What it does
 
-Each candidate analysis unit is scored across five components:
+The model evaluates candidate 500 m hexagons across Skåne using five spatial criteria.
 
-- **Habitat Context** — surrounding mapped habitat context.
-- **Ecological Network Context** — opposing-side habitat configuration.
-- **Riparian Opportunity** — mapped focal wetland and inland-water context.
-- **Protected-Area Reinforcement** — reinforcement context relative to terrestrial formal protection.
-- **Restoration Land Availability** — mapped candidate arable land available within the analysis unit.
+The web app includes:
 
-The three scenarios apply transparent, stakeholder-facing weights to these five finalized component scores. They are not learned coefficients or ecological probabilities.
+- three prioritization presets, plus adjustable component weights
+- a ranked Top Candidates shortlist
+- protected-area and wetland/inland-water context layers
+- an inspector showing how each selected analysis unit scores
 
-## Data sources
+## Method
 
-The MVP uses:
+The prioritization model uses five components:
 
-- SCB DeSO 2025 for the Skåne study-area boundary;
-- Naturvårdsverket NMD2023 Basskikt v2.1 for land-cover semantics;
-- Naturvårdsverket protected-area data; and
-- Natura 2000 data.
+- **Habitat Context** — surrounding mapped semi-natural habitat
+- **Ecological Network Context** — the spatial configuration of habitat around each candidate
+- **Riparian Opportunity** — mapped wetland and inland-water context within the candidate
+- **Protected-Area Reinforcement** — proximity to terrestrial protected areas
+- **Restoration Land Availability** — mapped arable land within the candidate
 
-See [docs/data-sources.md](docs/data-sources.md) for source decisions, provenance, and attribution considerations.
+Each component is converted to a relative 0–100 score across the eligible candidate population and combined using preset or user-adjusted weights.
 
-## Architecture
+The full methodology, including formulas and assumptions, is documented in [docs/methodology.md](docs/methodology.md).
 
-~~~text
-authoritative environmental data
-    ↓
-reproducible Python processing
-    ↓
-finalized candidate scores
-    ↓
-deterministic static delivery artifacts
-    ↓
-React + MapLibre application
-~~~
+## Data
 
-The frontend is a static site. The delivery contract contains one candidate GeoJSON file plus metadata, preset metadata, and a deterministic candidate-shortlist JSON companion. No API, database, authentication, PMTiles, or hosting-provider configuration is required by the current MVP.
+The main source datasets are:
+
+- SCB DeSO 2025 boundaries
+- Naturvårdsverket NMD2023 Basskikt v2.1
+- Naturvårdsverket protected-area data
+- Natura 2000
+
+See [docs/data-sources.md](docs/data-sources.md) for source details, licensing, and known limitations.
+
+## Stack
+
+The processing pipeline is built with Python, GeoPandas, Rasterio, Shapely, PyProj, NumPy, and pandas.
+
+The frontend uses React, TypeScript, MapLibre GL JS, and Vite, and is deployed as a static site on Cloudflare Pages.
 
 ## Running locally
 
-Create the Python environment and install development dependencies:
+Create a Python environment and install the project:
 
-~~~bash
+```bash
 python3.12 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e ".[dev]"
-~~~
+```
 
-The analytical pipeline requires the source data and processing prerequisites documented in [docs/methodology.md](docs/methodology.md) and [docs/data-sources.md](docs/data-sources.md). Once those prerequisites are satisfied, generate the canonical model and web-delivery artifacts from the repository root:
+After preparing the source data described in docs/data-sources.md:
 
-~~~bash
+```bash
 .venv/bin/python -m restoration_prioritizer.prioritization_model
 .venv/bin/python -m restoration_prioritizer.web_delivery
-~~~
 
-Build and preview the static frontend:
-
-~~~bash
 cd web
 npm ci
 npm run build
 npm run preview
-~~~
+```
 
-npm run build runs npm run data:sync automatically and copies the generated delivery artifacts into ignored web/public/data/ assets. The frontend currently assumes deployment at the site root; see [docs/production-readiness.md](docs/production-readiness.md) for the complete build contract and launch checklist.
+Generated delivery files are copied from `data/processed/` into ignored frontend assets under `web/public/data/`.
 
-## Methodology and caveats
+## Limitations
 
-This is regional, screening-scale decision support using population-relative component and scenario scores. Candidate units are deterministic nominal 500 m hexagons, not parcels, properties, or implementation sites. The outputs describe mapped environmental context and model weighting; they do not claim ecological quality, restoration probability, certainty, formal recommendation, landowner permission, or implementation feasibility.
+This is a regional screening model, not parcel-level restoration advice. Scores are relative to the candidate population and should not be interpreted as ecological probabilities or evidence that restoration is feasible at a particular location.
 
-The methodology and delivery contracts are documented in [docs/methodology.md](docs/methodology.md), [docs/web-delivery.md](docs/web-delivery.md), and [docs/application-ui.md](docs/application-ui.md).
+The wetland and inland-water overlay is generalized for display, and the underlying datasets do not capture land ownership, permissions, field conditions, or other site-level constraints.
 
-## Technology
+More detail is available in the methodology, data delivery notes, application notes, and deployment notes.
 
-Python, GeoPandas, Rasterio, Shapely, PyProj, NumPy, and pandas power the geospatial pipeline and scoring model. The application uses React, TypeScript, Vite, MapLibre GL JS, and OpenFreeMap's no-key basemap style.
+More detail is available in the [methodology](docs/methodology.md),
 
-## Quality gates
+[data delivery notes](docs/web-delivery.md),
 
-~~~bash
-.venv/bin/python -m pytest
-.venv/bin/ruff check .
-.venv/bin/ruff format --check .
-cd web
-npm ci
-npm run data:sync
-npm run lint
-npm run typecheck
-npm run build
-~~~
+[application notes](docs/application-ui.md), and
 
-## Application preview
-
-A final application screenshot should be added here before public repository publication. No screenshot is committed yet.
-
-## Project status
-
-The MVP analytical model and application workflow are development-complete. Public deployment, a software-license decision, final repository metadata, and a polished application screenshot remain publication decisions rather than additional product features.
+[deployment notes](docs/deployment.md).

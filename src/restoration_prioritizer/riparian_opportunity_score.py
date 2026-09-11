@@ -530,7 +530,7 @@ def build_riparian_opportunity_score(
         network_score = pd.read_csv(network_score_path)
     except (OSError, ValueError) as exc:
         raise RiparianOpportunityScoreError(
-            f"Could not read Step 15 input artifact: {exc}"
+            f"Could not read Riparian Opportunity input artifact: {exc}"
         ) from exc
 
     validate_raw_indicators(raw, expected_candidate_count=len(candidates))
@@ -664,7 +664,7 @@ def build_riparian_opportunity_score(
     }
     if not all(validation.values()):
         raise RiparianOpportunityScoreError(
-            f"Step 15 transformation validation failed: {validation}"
+            f"Riparian Opportunity transformation validation failed: {validation}"
         )
 
     raw_to_score_anchor = _score_anchors(raw_focal, scores)
@@ -713,7 +713,7 @@ def build_riparian_opportunity_score(
 
     provenance: dict[str, Any] = {
         "component_name": "Riparian Opportunity",
-        "status": "IMPLEMENTED FOR MVP",
+        "status": "canonical production artifact",
         "source": {
             "raw_indicator_path": str(raw_indicator_path),
             "candidate_source_path": str(candidate_units_path),
@@ -730,7 +730,7 @@ def build_riparian_opportunity_score(
                 "Fraction of the candidate hex's mapped non-marine landscape that consists of "
                 "NMD wetland context or inland water."
             ),
-            "hydrologic_context": "Step 5 wetland classes plus NMD inland water class 61",
+            "hydrologic_context": "NMD wetland classes plus inland water class 61",
             "denominator": "terrestrial land plus inland water",
             "excluded": "sea and no-data",
             "interpretation": "hydrologic land-cover context proxy, not a functional probability",

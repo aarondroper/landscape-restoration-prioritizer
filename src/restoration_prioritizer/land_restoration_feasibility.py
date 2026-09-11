@@ -3,7 +3,7 @@
 This module intentionally stops at factual, uncombined primitives.  The MVP
 meaning of ``Land-Restoration Feasibility`` here is narrower and more careful:
 mapped land-availability and artificial/developed-context diagnostics derived
-from the approved NMD analysis-unit and candidate artifacts.  It is not a
+from the NMD analysis-unit and candidate artifacts. It is not a
 cadastral, socioeconomic, legal, or implementation-feasibility model.
 """
 
@@ -102,7 +102,7 @@ FINALIZED_COMPONENT_FIELDS = {
 
 
 class LandRestorationFeasibilityError(ValueError):
-    """Raised when the Step 19 raw-indicator contract is malformed."""
+    """Raised when the raw-indicator contract is malformed."""
 
 
 def _require_columns(frame: pd.DataFrame, required: Iterable[str], label: str) -> None:
@@ -146,19 +146,19 @@ def _validate_fraction(values: np.ndarray, field: str, *, allow_missing: bool = 
 
 
 def validate_approved_semantics() -> None:
-    """Require the existing Step 5 semantic contract and no redefined class list."""
+    """Require the existing NMD semantic contract and no redefined class list."""
 
     validate_contract_definition()
     expected = (ARTIFICIAL_BUILDING, ARTIFICIAL_OTHER, ARTIFICIAL_TRANSPORT)
     if ROLE_FACTUAL_GROUPS[ARTIFICIAL_CONSTRAINT] != expected:
         raise LandRestorationFeasibilityError(
-            "The approved artificial_constraint role no longer matches NMD classes 51–53"
+            "The artificial_constraint role no longer matches NMD classes 51–53"
         )
     if PRIMARY_CANDIDATE not in ROLE_FACTUAL_GROUPS or ROLE_FACTUAL_GROUPS[PRIMARY_CANDIDATE] != (
         ARABLE,
     ):
         raise LandRestorationFeasibilityError(
-            "The approved primary_candidate role no longer matches NMD arable class 3"
+            "The primary_candidate role no longer matches NMD arable class 3"
         )
     if PEAT_EXTRACTION in ROLE_FACTUAL_GROUPS[ARTIFICIAL_CONSTRAINT]:
         raise LandRestorationFeasibilityError(
@@ -180,7 +180,7 @@ def _validate_geometry(frame: gpd.GeoDataFrame, label: str) -> None:
 def validate_input_frames(
     candidate_units: gpd.GeoDataFrame, analysis_units: gpd.GeoDataFrame
 ) -> None:
-    """Validate the Step 6 full grid and Step 7 candidate factual fields."""
+    """Validate the full grid and candidate factual fields."""
 
     validate_approved_semantics()
     if not isinstance(candidate_units, gpd.GeoDataFrame) or not isinstance(
@@ -249,7 +249,7 @@ def validate_input_frames(
 
 
 def candidate_area_to_hectares(candidate_area_m2: pd.Series | np.ndarray) -> np.ndarray:
-    """Convert candidate area directly from the Step 7 artifact to hectares."""
+    """Convert candidate area directly from the candidate artifact to hectares."""
 
     numeric = pd.to_numeric(pd.Series(candidate_area_m2), errors="coerce")
     if numeric.isna().any():
@@ -678,7 +678,7 @@ def _subtype_diagnostics(
         return {
             "available": False,
             "missing_fields": list(subtype_fields),
-            "reason": "Step 6 retains only aggregate artificial_constraint_pixels; subtype counts are not in the approved artifact.",
+            "reason": "The analysis-unit artifact retains only aggregate artificial_constraint_pixels; subtype counts are not available.",
             "aggregate_contribution": None,
         }
     totals = {field: int(analysis_units[field].sum()) for field in present}
@@ -740,7 +740,7 @@ def build_land_restoration_feasibility(
     output_path: Path = OUTPUT_PATH,
     provenance_path: Path = PROVENANCE_PATH,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Build the raw Step 19 table and its real-data audit manifest."""
+    """Build the raw table and its real-data audit manifest."""
 
     started = time.perf_counter()
     candidates = gpd.read_file(candidate_units_path, layer=CANDIDATE_UNITS_LAYER)
@@ -767,7 +767,7 @@ def build_land_restoration_feasibility(
         atol=0,
     ):
         raise LandRestorationFeasibilityError(
-            "Candidate area does not reconcile with Step 6 analysis units"
+            "Candidate area does not reconcile with the analysis-unit grid"
         )
 
     study = gpd.read_file(study_area_path, layer=STUDY_AREA_LAYER)
@@ -803,7 +803,9 @@ def build_land_restoration_feasibility(
         rtol=0,
         atol=0,
     ):
-        raise LandRestorationFeasibilityError("candidate_land_fraction was altered from Step 7")
+        raise LandRestorationFeasibilityError(
+            "candidate_land_fraction was altered from the candidate artifact"
+        )
 
     candidates_by_id = candidates.set_index("hex_id")
     analysis_by_id = analysis_units.set_index("hex_id")
@@ -823,7 +825,7 @@ def build_land_restoration_feasibility(
     }
     if not focal_reconciliation["matches_step6_counts"]:
         raise LandRestorationFeasibilityError(
-            "Focal artificial fraction does not reconcile with Step 6 counts"
+            "Focal artificial fraction does not reconcile with analysis-unit counts"
         )
 
     score_joined = output.copy()
@@ -982,12 +984,12 @@ def build_land_restoration_feasibility(
             "candidate_land": {
                 "role": PRIMARY_CANDIDATE,
                 "nmd_class": "3 = arable land",
-                "definition": "Eligible candidate land is the Step 7 candidate_area_m2 and candidate_fraction_of_terrestrial already derived from NMD arable pixels.",
+                "definition": "Eligible candidate land is candidate_area_m2 and candidate_fraction_of_terrestrial derived from NMD arable pixels.",
             },
             "artificial_constraint": {
                 "role": ARTIFICIAL_CONSTRAINT,
                 "nmd_classes": "51 = building; 52 = other artificial surfaces; 53 = transport",
-                "definition": "Approved NMD artificial_constraint role reused from Step 5; peat extraction 54, inland water, wetland, forest, open vegetation, and protected status are not artificial constraints.",
+                "definition": "NMD artificial_constraint role; peat extraction 54, inland water, wetland, forest, open vegetation, and protected status are not artificial constraints.",
             },
         },
         "sources": {
@@ -1007,7 +1009,7 @@ def build_land_restoration_feasibility(
             },
             "environmental_data_downloaded": False,
             "nmd_raster_read": False,
-            "approach": "Use generated Step 6/7 factual counts and candidate fields; no NMD raster reread or new environmental ingestion.",
+            "approach": "Use generated analysis-unit counts and candidate fields; no NMD raster reread or new environmental ingestion.",
         },
         "raw_formulas": {
             "candidate_land_area_ha": "candidate_area_m2 / 10,000",
@@ -1018,8 +1020,8 @@ def build_land_restoration_feasibility(
         },
         "neighborhood_definitions": {
             "focal": "Candidate grid unit itself; not a combined land/artificial formula.",
-            "adjacent": "The six Step 8 first-ring positions, focal excluded, using the full Step 6 terrestrial analysis grid.",
-            "local": "All 18 Step 8 positions with 1 <= hex distance <= 2, focal excluded, using the full Step 6 terrestrial analysis grid.",
+            "adjacent": "The six first-ring positions, focal excluded, using the full terrestrial analysis grid.",
+            "local": "All 18 positions with 1 <= hex distance <= 2, focal excluded, using the full terrestrial analysis grid.",
             "aggregation": "Pixel counts are aggregated first; per-cell fractions are not averaged.",
             "missing_positions": "Absent or water-only positions contribute no terrestrial denominator and are not treated as artificial=0 land.",
             "offsets": {
@@ -1154,7 +1156,7 @@ def build_land_restoration_feasibility(
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime_seconds": time.perf_counter() - started,
         "warnings": {
-            "status": "No Step 19 data-validation warnings; existing pytest rasterio PendingDeprecationWarnings are unrelated to this module.",
+            "status": "No data-validation warnings; existing pytest rasterio PendingDeprecationWarnings are unrelated to this module.",
             "data_warnings": [],
         },
         "dependency_changes": "None; existing project dependencies only.",
@@ -1178,7 +1180,7 @@ def build_land_restoration_feasibility(
 
 
 def main() -> None:
-    """Generate and summarize the real-data raw Step 19 artifact."""
+    """Generate and summarize the real-data raw artifact."""
 
     output, provenance = build_land_restoration_feasibility()
     print(

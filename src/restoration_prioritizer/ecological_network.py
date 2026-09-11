@@ -93,7 +93,7 @@ FULL_REQUIRED_FIELDS = (
 
 
 class EcologicalNetworkError(ValueError):
-    """Raised when the Step 6/7 network-indicator input contract is invalid."""
+    """Raised when the network-indicator input contract is invalid."""
 
 
 def _require_columns(frame: pd.DataFrame, required: Sequence[str], label: str) -> None:
@@ -1074,8 +1074,8 @@ def build_ecological_network(
             "habitat_context_score_source": str(habitat_context_score_path),
         },
         "underlying_habitat_proxy": (
-            "habitat_context_fraction_of_terrestrial from each Step 6 terrestrial analysis unit; "
-            "the Step 5 habitat_context_proxy land-cover role is used factually without thresholds."
+            "habitat_context_fraction_of_terrestrial from each terrestrial analysis unit; "
+            "the habitat_context_proxy land-cover role is used factually without thresholds."
         ),
         "grid_geometry_convention": {
             "crs": TARGET_CRS,
@@ -1108,7 +1108,7 @@ def build_ecological_network(
             "purpose": "Separate opposing-side arrangement from the amount of immediate surrounding habitat.",
             "opposing_balance_ratio": "The share of total immediate habitat that has matched habitat on an opposing grid axis.",
             "dominant_opposing_pair_share": "The share of total immediate habitat organized around the strongest single matched opposing pair.",
-            "relationship_to_absolute_strengths": "The Step 10 axis strengths remain as absolute diagnostic indicators; the Step 11 ratios normalize matched habitat by the total six-neighbor habitat amount.",
+            "relationship_to_absolute_strengths": "The axis strengths remain absolute diagnostic indicators; the configuration ratios normalize matched habitat by the total six-neighbor habitat amount.",
             "low_habitat_consequence": "A small but well-balanced opposing pair can receive a high ratio; no arbitrary minimum-habitat threshold is applied, and the audit quantifies this behavior.",
         },
         "step_10_redundancy_finding": (

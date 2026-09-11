@@ -1,7 +1,7 @@
-"""Run the fixed Step 22 prioritization-preset sensitivity experiment.
+"""Run the fixed prioritization-preset sensitivity experiment.
 
 The module evaluates exactly six policy/scenario weight vectors against the
-approved equal-weight reference.  It does not search weights, recalculate any
+canonical equal-weight reference. It does not search weights, recalculate any
 component, or write a final user-facing preset.
 """
 
@@ -562,7 +562,7 @@ def _validate_scheme_contract() -> None:
 def _read_balanced_reference(frame: pd.DataFrame) -> pd.DataFrame:
     if not BALANCED_REFERENCE_PATH.exists():
         raise PrioritizationModelError(
-            f"Missing approved balanced reference: {BALANCED_REFERENCE_PATH}"
+            f"Missing canonical balanced reference: {BALANCED_REFERENCE_PATH}"
         )
     reference = pd.read_csv(BALANCED_REFERENCE_PATH)
     _require_columns(reference, ("hex_id", BALANCED_SCORE, BOUNDARY_FLAG), "Balanced reference")
@@ -584,7 +584,7 @@ def build_sensitivity(
     output_path: Path = OUTPUT_PATH,
     provenance_path: Path = PROVENANCE_PATH,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Run the real-data Step 22 experiment and write both ignored artifacts."""
+    """Run the real-data sensitivity experiment and write both ignored artifacts."""
 
     started = time.perf_counter()
     _validate_scheme_contract()
@@ -602,13 +602,13 @@ def build_sensitivity(
         atol=STRICT_TOLERANCE,
     ):
         raise PrioritizationModelError(
-            "Recalculated equal-weight reference does not match approved baseline"
+            "Recalculated equal-weight reference does not match canonical baseline"
         )
     if not np.array_equal(
         scored[BOUNDARY_FLAG].astype(bool).to_numpy(),
         scored[f"{BOUNDARY_FLAG}_artifact"].astype(bool).to_numpy(),
     ):
-        raise PrioritizationModelError("Boundary flags do not reconcile with approved baseline")
+        raise PrioritizationModelError("Boundary flags do not reconcile with canonical baseline")
     scored = scored.drop(columns=[BALANCED_SCORE, f"{BOUNDARY_FLAG}_artifact"])
     scored = scored.sort_values("hex_id", kind="mergesort").reset_index(drop=True)
 
@@ -705,8 +705,8 @@ def build_sensitivity(
         ),
     }
     provenance: dict[str, Any] = {
-        "step": "Step 22 controlled weighting/preset sensitivity study",
-        "model_status": "analytical sensitivity study; no thematic preset finalized",
+        "step": "Controlled weighting/preset sensitivity study",
+        "model_status": "analytical sensitivity study; no additional thematic preset is emitted",
         "reference_model": {
             "name": "balanced_reference",
             "artifact_path": str(BALANCED_REFERENCE_PATH),
@@ -796,7 +796,7 @@ def build_sensitivity(
         ),
         "balanced_reference_assessment": {
             "serious_reason_to_reject_equal_weights": False,
-            "assessment": "No serious rejection reason was revealed in Step 22; the equal-weight model remains the approved Balanced reference candidate and is not changed here.",
+            "assessment": "The equal-weight model remains the Balanced reference candidate and is not changed here.",
         },
         "interpretive_caveats": [
             "Weights are policy/scenario choices, not statistically learned parameters.",
@@ -877,7 +877,7 @@ def _candidate_assessment(
             "median_absolute_percentile_rank_movement": movement,
             "top_10_overlap_percent": overlap,
             "severe_weakness_count_change": severe_delta,
-            "selection_status": "not selected; reserved for Step 23 review",
+            "selection_status": "not selected for the public presets",
         }
     return {
         "classification_rules": {
