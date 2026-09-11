@@ -8,7 +8,7 @@ The question behind the project is simple: **where should a conservation organiz
 
 [Open the application](https://landscape-restoration-prioritizer.pages.dev/)
 
-![Landscape Restoration Prioritizer application](docs/assets/application-preview.png)
+[![Landscape Restoration Prioritizer application](docs/assets/application-preview.png)](https://landscape-restoration-prioritizer.pages.dev/)
 
 ## What it does
 
