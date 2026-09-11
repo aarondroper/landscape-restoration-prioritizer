@@ -8,6 +8,8 @@ The question behind the project is simple: **where should a conservation organiz
 
 [Open the application](https://landscape-restoration-prioritizer.pages.dev/)
 
+![Landscape Restoration Prioritizer application](docs/assets/application-preview.png)
+
 ## What it does
 
 The model evaluates candidate 500 m hexagons across Skåne using five spatial criteria.
