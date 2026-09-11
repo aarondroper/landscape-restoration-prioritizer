@@ -20,6 +20,10 @@ The React + MapLibre application supports three finalized scenarios:
 
 Users can inspect the regional candidate surface, discover the top five candidates for the active scenario, navigate directly to a candidate, and inspect why its relative score has the value shown. Scores are population-relative model scores for screening-scale decision support.
 
+## Live demo
+
+[Open the deployed application](https://landscape-restoration-prioritizer.pages.dev/)
+
 ## Model
 
 Each candidate analysis unit is scored across five components:

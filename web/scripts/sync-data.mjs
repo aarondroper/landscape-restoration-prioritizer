@@ -32,6 +32,7 @@ const artifacts = [
 
 const generationHint =
   "Generate canonical assets from the repository root with: python -m restoration_prioritizer.prioritization_model and python -m restoration_prioritizer.web_delivery";
+const maxPagesAssetBytes = 25 * 1024 * 1024;
 
 async function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -66,6 +67,12 @@ const candidateArtifact = artifacts[0];
 await ensureSourceExists(candidateArtifact);
 const candidateBytes = await readFile(candidateArtifact.source);
 const sourceHash = await sha256(candidateBytes);
+
+if (candidateBytes.byteLength >= maxPagesAssetBytes) {
+  throw new Error(
+    `Candidate GeoJSON is ${candidateBytes.byteLength} bytes; Cloudflare Pages static assets must remain below ${maxPagesAssetBytes} bytes (25 MiB). Reduce the artifact only through an approved delivery-contract review.`,
+  );
+}
 
 if (metadata.file_size_bytes !== candidateBytes.byteLength) {
   throw new Error(
