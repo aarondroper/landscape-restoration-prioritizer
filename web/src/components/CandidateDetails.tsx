@@ -42,9 +42,9 @@ export function CandidateDetails({ candidate, preset, onClose }: CandidateDetail
         </button>
       </div>
       <div className="selected-score">
-        <span>Priority score</span>
+        <span>Relative model score</span>
         <strong>{formatScore(candidate[PRESET_SCORE_FIELDS[preset.id]])}</strong>
-        <small>{preset.name} · relative model score</small>
+        <small>{preset.name} · screening-scale decision support</small>
       </div>
 
       <Tabs.Root className="detail-tabs" defaultValue="overview">

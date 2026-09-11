@@ -98,7 +98,8 @@ verified at ingestion time. It is the first additional source to revisit.
 
 ## Risks carried into implementation
 
-- NMD v2.1 Skåne coverage is an acceptance gate, not yet a verified fact.
+- NMD v2.1 Skåne coverage passed the documented acceptance gate; source
+  coverage remains a provenance item to recheck if the upstream product changes.
 - NMD wetland and open-habitat classes require documented interpretation;
   class membership should not be treated as a field-validated nature value.
 - Narrow streams may be missed by raster-only riparian context.

@@ -1,9 +1,9 @@
 # Web-delivery candidate dataset
 
-Step 24 materializes the first web-delivery contract for the Landscape
-Restoration Prioritizer. It is a delivery adapter over approved analytical
-artifacts; it does not change the model, scores, weights, candidate geometry,
-or environmental data.
+The web-delivery command materializes the static delivery contract for the
+Landscape Restoration Prioritizer. It is a delivery adapter over approved
+analytical artifacts; it does not change the model, scores, weights, candidate
+geometry, or environmental data.
 
 ## Build command and outputs
 
@@ -37,7 +37,7 @@ hexagon and no geometry variants.
   `data/processed/components/riparian_opportunity.csv`.
 - Protected-area explanatory fields:
   `data/processed/components/protected_area_reinforcement.csv`.
-- Availability explanatory fields:
+- Restoration Land Availability explanatory fields (historical filename):
   `data/processed/components/land_restoration_feasibility.csv`.
 
 All joins are exact one-to-one joins by `hex_id`. The source geometry is
@@ -68,8 +68,8 @@ artificial_focal_fraction
 boundary_edge_flag
 ```
 
-The three preset scores are delivered in the same feature so a later frontend
-can switch presets without another network request. The canonical preset
+The three preset scores are delivered in the same feature so the frontend can
+switch presets without another network request. The canonical preset
 definitions remain those in `prioritization_model.py` and `presets.json`:
 
 | Preset | Habitat | Network | Riparian | Protection | Availability |
@@ -114,17 +114,15 @@ precision, and preset metadata for static frontend validation.
 
 ## Delivery architecture assessment
 
-Step 24 measures the actual uncompressed and gzip-equivalent payload, bytes per
-feature, geometry coordinate counts, Polygon/MultiPolygon counts, and an
+The delivery audit measures the actual uncompressed and gzip-equivalent payload,
+bytes per feature, geometry coordinate counts, Polygon/MultiPolygon counts, and an
 approximate geometry-versus-property payload breakdown. It also checks JSON
 parsing, exact property presence, finite numeric values, source IDs, duplicate
 feature IDs, source/transformed geometry validity, and plausible Skåne bounds.
 
-The current architecture target is one static GeoJSON FeatureCollection. The
-measured artifact determines whether that remains adequate. The final
-GeoJSON-versus-vector-tile decision is intentionally pending browser and
-delivery review; Step 24 does not add PMTiles, MBTiles, Tippecanoe, APIs,
-PostGIS, or a MapLibre/React frontend.
+The current architecture is one static GeoJSON FeatureCollection consumed by
+the React/MapLibre frontend. The approved MVP does not add PMTiles, MBTiles,
+Tippecanoe, APIs, PostGIS, or a second candidate geometry representation.
 
 The current real-artifact benchmark is:
 
@@ -138,8 +136,9 @@ The current real-artifact benchmark is:
 The measured result is classified **CLEARLY SUITABLE FOR SINGLE GEOJSON** from
 the artifact alone: every feature is a simple Polygon, the median and maximum
 exterior ring coordinate counts are both 7, and all scores are precomputed.
-Browser parse/render benchmarking remains an appropriate later check before
-making a final production delivery decision.
+The approved MVP browser review found the single-GeoJSON delivery adequate for
+the product workflow. Deployment should still validate the chosen host's HTTP
+compression, content types, and end-to-end browser loading behavior.
 
 ## Interpretation caveats
 

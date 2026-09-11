@@ -26,12 +26,12 @@ const artifacts = [
   {
     name: "presets.json",
     source: path.join(dataDirectory, "prioritization", "presets.json"),
-    required: false,
+    required: true,
   },
 ];
 
 const generationHint =
-  "Generate it from the repository root with: python -m restoration_prioritizer.web_delivery";
+  "Generate canonical assets from the repository root with: python -m restoration_prioritizer.prioritization_model and python -m restoration_prioritizer.web_delivery";
 
 async function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");

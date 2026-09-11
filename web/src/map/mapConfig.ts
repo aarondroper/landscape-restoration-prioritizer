@@ -1,7 +1,7 @@
 import { setWorkerUrl } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 
-// Provisional no-key basemap retained for this product pass; revisit with later delivery evidence.
+// OpenFreeMap provides the current no-key basemap style; deployment remains provider-agnostic.
 export const BASEMAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 export const CANDIDATE_DATA_URL = "/data/candidates.geojson";
 export const CANDIDATE_SOURCE_ID = "candidates";

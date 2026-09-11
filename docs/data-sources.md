@@ -25,8 +25,8 @@ geometry or introduce disproportionate access and legal friction.
   Basskikt version 2.1. The current product description is [NMD2023
   Basskikt v2.1, edition 1.1 (2026-03-19)](https://geodata.naturvardsverket.se/nedladdning/marktacke/NMD2023/Basskikt_v2_x/NMD2023_Produktbeskrivning_Basskikt_NMD2023_v2_1.pdf).
 - **Role:** primary land-cover/habitat backbone for habitat context,
-  ecological-network context, riparian context, and restoration-feasibility
-  constraints.
+  ecological-network context, riparian context, and restoration-land-availability
+  context.
 - **Coverage and time:** the v2.x product is produced progressively; the
   documentation exposes a current extent metadata layer named
   `NV_NMD2023_version_baskartering`. The reference imagery includes 2023
@@ -211,7 +211,7 @@ out of scope.
 | Ecological network context | NMD2023 plus adopted protected layers; TUVA optional | Habitat patch composition and spatial relationships to protected or surveyed habitat anchors. |
 | Riparian opportunity | NMD2023 alone for MVP | Inland-water class, wetland classes, and wetland/forest context. Narrow stream geometry is a known weakness; no separate hydro layer is selected. |
 | Protected-area reinforcement | `SkyddadeOmraden` + `N2000` | National parks, nature reserves, SCI, SPA, SPA/SCI, status and designation/update fields; later physical union to avoid overlap double-counting. |
-| Land-restoration feasibility | NMD2023; terrain deferred | Agricultural/open/built/artificial/water/wetland/forest composition and exclusions. Slope is deferred. |
+| Restoration land availability | NMD2023; terrain deferred | Mapped eligible arable land and surrounding artificial-context diagnostics. Slope is deferred. |
 
 ## Live verification record
 

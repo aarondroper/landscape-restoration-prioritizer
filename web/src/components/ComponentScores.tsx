@@ -57,7 +57,7 @@ export function ComponentScores({ candidate, preset }: ComponentScoresProps) {
           </div>
         );
       })}
-      <p className="component-note">Scores use a common 0–100 scale. Percentages show active preset weights.</p>
+      <p className="component-note">Relative model scores use a common 0–100 scale. Percentages show active preset weights.</p>
     </div>
   );
 }

@@ -22,7 +22,7 @@ export function TopCandidates({
         <h2 className="section-label" id="top-candidates-heading">Top candidates</h2>
         <span className="quiet-label">{activePreset.name}</span>
       </div>
-      <p className="top-candidates-context">Screening shortlist · ranked by active preset</p>
+      <p className="top-candidates-context">Screening shortlist · relative model score under active preset</p>
       {status === "loading" ? <p className="shortlist-status">Loading shortlist…</p> : null}
       {status === "error" ? <p className="shortlist-status">Shortlist unavailable</p> : null}
       {status === "ready" && candidates ? (

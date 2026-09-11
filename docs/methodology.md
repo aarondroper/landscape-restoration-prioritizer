@@ -575,33 +575,33 @@ hydrographic dataset.
 
 The Riparian Opportunity component is **IMPLEMENTED FOR MVP**.
 
-## Planned analytical components
+## Finalized MVP components
 
 Each candidate cell will retain five independently available component scores:
 
-1. **Habitat context** — proximity to or presence within landscapes containing
-   existing semi-natural habitat.
-2. **Ecological network context** — potential to reinforce, connect, enlarge,
-   or reduce isolation among existing habitat areas.
-3. **Riparian opportunity** — relationship to rivers, lakes, wetlands, and
-   other relevant hydrological features.
-4. **Protected-area reinforcement** — relationship to nature reserves, Natura
-   2000, and the existing conservation network.
-5. **Land-restoration feasibility** — land-cover composition and obvious
-   constraints, favoring plausibly modifiable land and penalizing built,
-   artificial, or otherwise clearly unsuitable areas.
+1. **Habitat Context** — relative surrounding mapped habitat context.
+2. **Ecological Network Context** — relative opposing-side habitat
+   configuration context.
+3. **Riparian Opportunity** — relative focal mapped wetland and inland-water
+   context.
+4. **Protected-Area Reinforcement** — relative reinforcement context for
+   terrestrial formal protection.
+5. **Restoration Land Availability** — relative amount of mapped eligible
+   arable land within the analysis unit.
 
 Raw indicators will be transformed into normalized **0–100 relative component
 scores** within the study population. The final overall score will be a
 weighted mean of the five components. Component values must remain available
 alongside the overall score for interpretation and auditability.
 
-The planned weight presets are **Balanced**, **Connectivity first**, and
-**Riparian restoration**. These are predefined component-weight configurations,
-not separate analytical models.
+The finalized user-facing presets are **Balanced**, **Connectivity First**, and
+**Riparian Restoration**. These are predefined component-weight configurations,
+not separate analytical models; their canonical vectors are documented in the
+final MVP preset section below.
 
 The first-pass source support is deliberately limited. NMD2023 supplies the
-land-cover, broad habitat, wetland, inland-water, and feasibility context;
+land-cover, broad habitat, wetland, inland-water, and restoration-land-
+availability context;
 Naturvårdsverket's `SkyddadeOmraden` and `N2000` WFS layers supply the adopted
 protected-area network; and the SCB boundary is used only as a study-area
 mask. NMD-only hydrology is accepted for the MVP, with narrow streams recorded
@@ -619,9 +619,10 @@ decision-support opportunity within the study population; they are not
 absolute ecological value, restoration probability, or a parcel-level
 recommendation.
 
-Exact indicators for the remaining components and all later transformations
-remain to be validated against their source data. This document intentionally
-does not prescribe later formulas prematurely.
+The exact indicators and transformations for all five finalized components are
+defined in the component sections below and represented in the generated
+artifacts. The scores remain relative model scores for screening-scale
+decision support.
 
 ## Current assumptions and limitations
 
@@ -635,7 +636,8 @@ does not prescribe later formulas prematurely.
   habitat-context proxy, wetland context, and constraint roles are analytical
   land-cover masks, not ecological-quality or feasibility measurements.
 - Feature-distance definitions, habitat/network indicators, treatment of
-  missing data, normalization, weights, and scoring require later validation.
+  missing data, normalization, weights, and scoring are defined in the
+  finalized component and model sections below.
 - NMD inland-water and wetland classes are the MVP riparian source. Narrow
   streams may be underrepresented; a separate hydrographic vector source is
   deferred because available alternatives add access/legal complexity or are
@@ -661,10 +663,10 @@ marine territory; no water clipping is applied at this stage.
 
 The ingestion retrieves selected features intersecting a fixed 5 km buffer
 around the SCB-derived Skåne study geometry. This outside-Skåne context exists
-only to support later proximity analysis and does not expand the candidate
-study region. The final Protected-Area Reinforcement indicator and scoring
-method remain undecided; Step 16 records source, geometry, overlap, and
-candidate-relationship diagnostics only.
+only to support the finalized proximity analysis and does not expand the
+candidate study region. Step 16 records the source, geometry, overlap, and
+candidate-relationship inputs; the final indicator and scoring method are
+defined in the Protected-Area Reinforcement sections below.
 
 - No field validation, parcel-level feasibility assessment, landowner context,
   costs, or implementation constraints are included in this initial contract.
@@ -760,10 +762,10 @@ acquisition buffer is used as a score threshold. Cross-county terrestrial
 support outside the Skåne NMD raster remains unavailable, and formal protection
 does not imply ecological quality or restoration feasibility.
 
-## Mapped land-restoration feasibility / land-availability context (Step 19)
+## Mapped restoration-land-availability context (Step 19)
 
-The fifth planned component is currently interpreted narrowly as a **mapped
-land-restoration feasibility / land-availability context proxy**. It is not
+The fifth component is interpreted narrowly as a **mapped restoration-land-
+availability context proxy**. It is not
 real implementation feasibility in the socioeconomic, cadastral, legal, or
 financial sense. The MVP has no ownership, land price, farmer or landowner
 willingness, agricultural yield, soil suitability, drainage infrastructure,
