@@ -14,15 +14,18 @@ fill uses the active precomputed score field and one shared absolute 0–100
 ordered ramp, with stops at 0, 25, 40, 55, 70, 85, and 100; the legend uses
 the same ramp and describes the values as relative model scores from 0 to 100.
 
-The left panel contains the project identity, the three approved
-prioritization presets, the active score legend, candidate priority and
-candidate-boundary visibility controls, a compact Top Candidates screening
-shortlist, and the screening-scale model note. The shortlist shows the top
-five entries for the active preset and is backed by the static top-50 delivery
-companion; it is not a second ranking or filtering model.
-Preset metadata and weights are loaded from `/data/presets.json`. Switching a
-preset updates the MapLibre fill paint expression and selected candidate score
-without refetching GeoJSON or recomputing scores in the browser.
+The left panel contains the project identity, a compact prioritization-preset
+selector, adjustable component weights, Map Layers with candidate priority, a
+compact Top Candidates screening shortlist, and the screening-scale model
+note. The shortlist shows the top five entries for a canonical preset from the
+static top-50 delivery companion. Custom weights use a separately lazy-loaded
+component-score index and client-side ranking; it is not a second analytical
+model.
+Preset metadata and canonical weights are loaded from `/data/presets.json`.
+Switching a preset updates the MapLibre fill paint expression and selected
+candidate score without refetching GeoJSON. Custom slider values are raw
+non-negative relative weights from 0 to 100; they are normalized at calculation
+time and the effective percentages are shown beside each slider.
 
 Each shortlist row is a keyboard-accessible button showing rank, the active
 preset score, and the analysis-unit ID. Selecting a row uses the same selected
@@ -41,9 +44,8 @@ outline. The inspector has Overview, Components, and Details tabs. The
 Components tab shows all five finalized component scores as horizontal bars and
 subtly shows the active preset weights. The Details tab exposes the delivered
 raw/supporting facts with units and caveats. Radix UI Tabs supplies keyboard
-accessible tab behavior; preset radios and map-display checkboxes retain native
-semantics with compact custom indicators, active-row styling, labels, and
-visible keyboard focus states.
+accessible tab behavior; the preset select, weight sliders, and Map Layers
+checkbox retain native semantics with labels and visible keyboard focus states.
 
 ## Explanation policy
 
@@ -79,3 +81,24 @@ the frontend build gates, and the backend gates remain the automated checks.
 Deferred features include search/geocoding, advanced filters,
 exporting, URL/share state, methodology UI, additional environmental layers,
 PMTiles, APIs, PostGIS, deployment, and a full mobile redesign.
+
+## Custom icon assets
+
+Placeholder assets live in `web/public/icons/` and are loaded through semantic
+slots. The exact replacement filenames are:
+
+- `app-logo.svg`
+- `component-habitat.svg`
+- `component-network.svg`
+- `component-riparian.svg`
+- `component-protected.svg`
+- `component-availability.svg`
+- `top-candidates.svg`
+- `selected-area.svg`
+
+Replace any placeholder by overwriting the corresponding SVG; no React code
+needs to change. Prefer a square `viewBox` such as `0 0 24 24`, a transparent
+background, no embedded raster images, reasonably simple paths, and no
+page-sized hard-coded dimensions. The current implementation uses `<img>`;
+external SVG `currentColor` does not inherit from the page, so author final
+fill/stroke colors directly in replacement files.

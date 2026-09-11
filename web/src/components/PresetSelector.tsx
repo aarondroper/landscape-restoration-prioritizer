@@ -1,30 +1,31 @@
-import type { PresetDefinition, PresetId } from "../data/types";
+import type { ActivePresetId, PresetDefinition, PresetId } from "../data/types";
 
 interface PresetSelectorProps {
-  activePreset: PresetId;
+  activePreset: ActivePresetId;
   presets: Record<PresetId, PresetDefinition>;
-  onChange: (preset: PresetId) => void;
+  onChange: (preset: ActivePresetId) => void;
 }
 
 export function PresetSelector({ activePreset, presets, onChange }: PresetSelectorProps) {
   return (
     <fieldset className="preset-selector">
       <legend className="section-label">Prioritization preset</legend>
-      <div className="preset-options">
+      <select
+        className="preset-select"
+        value={activePreset}
+        onChange={(event) => onChange(event.target.value as ActivePresetId)}
+        aria-label="Prioritization preset"
+      >
         {(Object.keys(presets) as PresetId[]).map((id) => (
-          <label className="preset-option" data-active={activePreset === id} key={id}>
-            <input
-              type="radio"
-              name="prioritization-preset"
-              value={id}
-              checked={activePreset === id}
-              onChange={() => onChange(id)}
-            />
-            <span>{presets[id].name}</span>
-          </label>
+          <option value={id} key={id}>{presets[id].name}</option>
         ))}
-      </div>
-      <p className="preset-description">{presets[activePreset].description}</p>
+        <option value="custom">Custom</option>
+      </select>
+      <p className="preset-description">
+        {activePreset === "custom"
+          ? "Uses your adjusted relative weights across all five model dimensions."
+          : presets[activePreset].description}
+      </p>
     </fieldset>
   );
 }

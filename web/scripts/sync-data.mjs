@@ -24,6 +24,11 @@ const artifacts = [
     required: true,
   },
   {
+    name: "candidate_weight_index.json",
+    source: path.join(dataDirectory, "delivery", "candidate_weight_index.json"),
+    required: true,
+  },
+  {
     name: "presets.json",
     source: path.join(dataDirectory, "prioritization", "presets.json"),
     required: true,

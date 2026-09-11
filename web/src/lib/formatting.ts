@@ -20,3 +20,9 @@ export function formatProtectedDistance(steps: number): string {
   if (steps === 1) return "Adjacent hex context";
   return `${Math.round(steps)} grid steps`;
 }
+
+export function formatAnalysisUnitId(hexId: string): string {
+  const match = /^h_(-?\d+)_(-?\d+)$/.exec(hexId);
+  if (!match) return hexId;
+  return `H-${match[1].replace(/^-/, "")}-${match[2].replace(/^-/, "")}`;
+}

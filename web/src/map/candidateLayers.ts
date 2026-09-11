@@ -5,6 +5,7 @@ import type {
   LineLayerSpecification,
 } from "maplibre-gl";
 import type { PresetScoreField } from "../data/types";
+import type { ComponentScoreField, WeightVector } from "../data/types";
 import {
   CANDIDATE_BOUNDARY_LAYER_ID,
   CANDIDATE_FILL_LAYER_ID,
@@ -14,23 +15,16 @@ import {
   CANDIDATE_SELECTED_OUTLINE_LAYER_ID,
   CANDIDATE_SOURCE_ID,
 } from "./mapConfig";
+import { SCORE_RAMP, SCORE_RAMP_CSS } from "../lib/scoreScale";
 
-export const SCORE_RAMP = [
-  { value: 0, color: "#f1e9bf" },
-  { value: 25, color: "#d6dea6" },
-  { value: 40, color: "#abc99a" },
-  { value: 55, color: "#77ae91" },
-  { value: 70, color: "#4b9187" },
-  { value: 85, color: "#286f72" },
-  { value: 100, color: "#154f5b" },
-] as const;
+export { SCORE_RAMP, SCORE_RAMP_CSS };
 
-export const SCORE_RAMP_CSS = `linear-gradient(90deg, ${SCORE_RAMP.map(
-  (stop) => `${stop.color} ${stop.value}%`,
-).join(", ")})`;
-
-export function getCandidateFillPaint(scoreField: PresetScoreField): FillLayerSpecification["paint"] {
-  const scoreExpression: ExpressionSpecification = ["get", scoreField];
+export function getCandidateFillPaint(
+  scoreField: PresetScoreField | WeightVector,
+): FillLayerSpecification["paint"] {
+  const scoreExpression: ExpressionSpecification = typeof scoreField === "string"
+    ? ["get", scoreField]
+    : getWeightedScoreExpression(scoreField);
   return {
     "fill-color": [
       "interpolate",
@@ -40,6 +34,18 @@ export function getCandidateFillPaint(scoreField: PresetScoreField): FillLayerSp
     ],
     "fill-opacity": 0.78,
   };
+}
+
+function getWeightedScoreExpression(weights: WeightVector): ExpressionSpecification {
+  const fields: ComponentScoreField[] = [
+    "habitat_context_score",
+    "ecological_network_score",
+    "riparian_opportunity_score",
+    "protected_area_reinforcement_score",
+    "restoration_land_availability_score",
+  ];
+  const terms = fields.map((field) => ["*", ["get", field], weights[field]]);
+  return ["/", ["+", ...terms], fields.reduce((sum, field) => sum + weights[field], 0)] as ExpressionSpecification;
 }
 
 export const candidateFillLayer: FillLayerSpecification = {

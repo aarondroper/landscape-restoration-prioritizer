@@ -25,6 +25,7 @@ from restoration_prioritizer.web_delivery import (
     _rounding_audit,
     _validate_preset_metadata,
     assemble_delivery_frame,
+    build_candidate_weight_index,
     build_candidate_shortlists,
     reconcile_ids,
     round_delivery_properties,
@@ -293,3 +294,35 @@ def test_default_shortlist_top_n_is_exactly_fifty() -> None:
     for entries in shortlists.values():
         assert len(entries) == TOP_N
         assert [entry["rank"] for entry in entries] == list(range(1, TOP_N + 1))
+
+
+def test_candidate_weight_index_has_exact_narrow_schema_and_expected_values() -> None:
+    index, audit = build_candidate_weight_index(_assembled(), expected_count=2)
+
+    assert len(index) == 2
+    assert [entry["hex_id"] for entry in index] == ["h_01", "h_02"]
+    assert all(list(entry) == ["hex_id", "longitude", "latitude", *SCORE_FIELDS] for entry in index)
+    assert index[0]["habitat_context_score"] == 2.235
+    assert index[0]["longitude"] == pytest.approx(index[0]["longitude"], abs=0.000001)
+    assert audit["entry_count"] == 2
+    assert audit["source_crs"] == "EPSG:3006"
+    assert audit["output_crs"] == "EPSG:4326"
+    with pytest.raises(WebDeliveryError, match="expected 3"):
+        build_candidate_weight_index(_assembled(), expected_count=3)
+
+
+def test_candidate_weight_index_centroids_and_coordinates_use_delivery_rounding() -> None:
+    frame = _assembled()
+    first, first_audit = build_candidate_weight_index(frame)
+    second, second_audit = build_candidate_weight_index(frame.sample(frac=1, random_state=4))
+
+    assert first == second
+    assert first_audit == second_audit
+    for entry in first:
+        geometry = frame.loc[frame["hex_id"] == entry["hex_id"], "geometry"].iloc[0]
+        expected = gpd.GeoSeries([geometry.centroid], crs="EPSG:3006").to_crs("EPSG:4326").iloc[0]
+        assert (entry["longitude"], entry["latitude"]) == (
+            round(expected.x, 6),
+            round(expected.y, 6),
+        )
+        assert np.isfinite([entry["longitude"], entry["latitude"]]).all()

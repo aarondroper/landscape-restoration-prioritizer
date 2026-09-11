@@ -1,39 +1,45 @@
-import { Leaf } from "lucide-react";
 import type {
+  ActivePresetId,
+  ComponentScoreField,
   DeliveryMetadata,
   PresetDefinition,
   PresetId,
   ShortlistItem,
+  WeightIndexItem,
 } from "../data/types";
+import type { RawWeightVector } from "../lib/weighting";
+import { Icon } from "./Icon";
 import { MapDisplayControls } from "./MapDisplayControls";
 import { PresetSelector } from "./PresetSelector";
-import { ScoreLegend } from "./ScoreLegend";
 import { TopCandidates } from "./TopCandidates";
+import { WeightControls } from "./WeightControls";
 
 interface SidebarProps {
   metadata: DeliveryMetadata;
-  activePreset: PresetId;
+  activePreset: ActivePresetId;
   presets: Record<PresetId, PresetDefinition>;
+  presetDefinition: PresetDefinition;
+  rawWeights: RawWeightVector;
   priorityVisible: boolean;
-  boundariesVisible: boolean;
-  onPresetChange: (preset: PresetId) => void;
+  onPresetChange: (preset: ActivePresetId) => void;
+  onWeightChange: (field: ComponentScoreField, value: number) => void;
   onPriorityChange: (visible: boolean) => void;
-  onBoundariesChange: (visible: boolean) => void;
-  shortlist?: ShortlistItem[];
-  shortlistStatus: "loading" | "ready" | "error";
+  shortlist?: { candidate: ShortlistItem | WeightIndexItem; rank: number; score: number }[];
+  shortlistStatus: "loading" | "ready" | "error" | "updating";
   selectedCandidateId?: string;
-  onCandidateSelect: (candidate: ShortlistItem) => void;
+  onCandidateSelect: (candidate: ShortlistItem | WeightIndexItem) => void;
 }
 
 export function Sidebar({
   metadata,
   activePreset,
   presets,
+  presetDefinition,
+  rawWeights,
   priorityVisible,
-  boundariesVisible,
   onPresetChange,
+  onWeightChange,
   onPriorityChange,
-  onBoundariesChange,
   shortlist,
   shortlistStatus,
   selectedCandidateId,
@@ -43,7 +49,7 @@ export function Sidebar({
     <aside className="sidebar" aria-label="Prioritizer controls">
       <div className="project-identity">
         <div className="brand-mark" aria-hidden="true">
-          <Leaf size={18} strokeWidth={1.8} />
+          <Icon name="app-logo.svg" />
         </div>
         <div>
           <h1>Landscape Restoration Prioritizer</h1>
@@ -57,27 +63,20 @@ export function Sidebar({
 
       <div className="sidebar-content">
         <PresetSelector activePreset={activePreset} presets={presets} onChange={onPresetChange} />
-        <ScoreLegend />
+        <WeightControls rawWeights={rawWeights} onChange={onWeightChange} />
+        <MapDisplayControls
+          priorityVisible={priorityVisible}
+          onPriorityChange={onPriorityChange}
+        />
         <TopCandidates
-          activePreset={presets[activePreset]}
+          activePreset={activePreset}
+          presetDefinition={presetDefinition}
+          metadata={metadata}
           candidates={shortlist}
           status={shortlistStatus}
           selectedCandidateId={selectedCandidateId}
           onSelect={onCandidateSelect}
         />
-        <MapDisplayControls
-          priorityVisible={priorityVisible}
-          boundariesVisible={boundariesVisible}
-          onPriorityChange={onPriorityChange}
-          onBoundariesChange={onBoundariesChange}
-        />
-      </div>
-
-      <div className="model-note">
-        <div className="model-note-value">{metadata.feature_count.toLocaleString("en-US")}</div>
-        <div className="model-note-label">candidate analysis units</div>
-        <p>500 m hexagons</p>
-        <small>Screening-scale decision support — not parcel-level restoration recommendations.</small>
       </div>
     </aside>
   );

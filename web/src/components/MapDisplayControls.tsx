@@ -1,23 +1,20 @@
 import { Layers3 } from "lucide-react";
+import { ScoreLegend } from "./ScoreLegend";
 
 interface MapDisplayControlsProps {
   priorityVisible: boolean;
-  boundariesVisible: boolean;
   onPriorityChange: (visible: boolean) => void;
-  onBoundariesChange: (visible: boolean) => void;
 }
 
 export function MapDisplayControls({
   priorityVisible,
-  boundariesVisible,
   onPriorityChange,
-  onBoundariesChange,
 }: MapDisplayControlsProps) {
   return (
-    <section className="sidebar-section map-display" aria-labelledby="map-display-title">
+    <section className="sidebar-section map-layers" aria-labelledby="map-layers-title">
       <div className="section-heading-row">
-        <h2 id="map-display-title" className="section-label">
-          Map display
+        <h2 id="map-layers-title" className="section-label">
+          Map layers
         </h2>
         <Layers3 size={15} strokeWidth={1.7} aria-hidden="true" />
       </div>
@@ -29,14 +26,7 @@ export function MapDisplayControls({
         />
         <span>Candidate priority</span>
       </label>
-      <label className="checkbox-row">
-        <input
-          type="checkbox"
-          checked={boundariesVisible}
-          onChange={(event) => onBoundariesChange(event.target.checked)}
-        />
-        <span>Candidate boundaries</span>
-      </label>
+      <ScoreLegend priorityVisible={priorityVisible} />
     </section>
   );
 }

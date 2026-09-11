@@ -11,7 +11,7 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import { parseCandidateProperties } from "../data/candidateProperties";
 import { PRESET_SCORE_FIELDS } from "../data/types";
-import type { CandidateProperties, DeliveryMetadata, PresetId, ShortlistItem } from "../data/types";
+import type { ActivePresetId, CandidateProperties, DeliveryMetadata, ShortlistItem, WeightVector } from "../data/types";
 import {
   candidateBoundaryLayer,
   candidateFillLayer,
@@ -23,7 +23,6 @@ import {
   getCandidateFillPaint,
 } from "./candidateLayers";
 import {
-  CANDIDATE_BOUNDARY_LAYER_ID,
   CANDIDATE_DATA_URL,
   CANDIDATE_FILL_LAYER_ID,
   CANDIDATE_SELECTED_FILL_LAYER_ID,
@@ -41,12 +40,12 @@ import {
 
 interface CandidateMapProps {
   metadata: DeliveryMetadata;
-  activePreset: PresetId;
+  activePreset: ActivePresetId;
+  weights: WeightVector;
   selectedCandidateId?: string;
   priorityVisible: boolean;
-  boundariesVisible: boolean;
   onSelect: (candidate: CandidateProperties) => void;
-  focusRequest?: Pick<ShortlistItem, "hex_id" | "longitude" | "latitude">;
+  focusRequest?: Pick<ShortlistItem, "hex_id" | "longitude" | "latitude"> & { selectOnFocus?: boolean };
 }
 
 function bboxFromMetadata(metadata: DeliveryMetadata): [[number, number], [number, number]] {
@@ -60,9 +59,9 @@ function bboxFromMetadata(metadata: DeliveryMetadata): [[number, number], [numbe
 export function CandidateMap({
   metadata,
   activePreset,
+  weights,
   selectedCandidateId,
   priorityVisible,
-  boundariesVisible,
   onSelect,
   focusRequest,
 }: CandidateMapProps) {
@@ -71,8 +70,8 @@ export function CandidateMap({
   const hoveredIdRef = useRef<string | number | null>(null);
   const selectedHexIdRef = useRef(selectedCandidateId);
   const activePresetRef = useRef(activePreset);
+  const weightsRef = useRef(weights);
   const priorityVisibleRef = useRef(priorityVisible);
-  const boundariesVisibleRef = useRef(boundariesVisible);
   const focusRequestRef = useRef(focusRequest);
   const [mapError, setMapError] = useState<string>();
 
@@ -82,9 +81,9 @@ export function CandidateMap({
 
   useEffect(() => {
     activePresetRef.current = activePreset;
+    weightsRef.current = weights;
     priorityVisibleRef.current = priorityVisible;
-    boundariesVisibleRef.current = boundariesVisible;
-  }, [activePreset, boundariesVisible, priorityVisible]);
+  }, [activePreset, priorityVisible, weights]);
 
   useEffect(() => {
     focusRequestRef.current = focusRequest;
@@ -153,20 +152,11 @@ export function CandidateMap({
       map.addLayer(candidateSelectedFillLayer);
       map.addLayer(candidateSelectedHaloLayer);
       map.addLayer(candidateSelectedOutlineLayer);
-      map.setPaintProperty(
-        CANDIDATE_FILL_LAYER_ID,
-        "fill-color",
-        getCandidateFillPaint(PRESET_SCORE_FIELDS[activePresetRef.current])!["fill-color"]!,
-      );
+      map.setPaintProperty(CANDIDATE_FILL_LAYER_ID, "fill-color", getMapFillPaint(activePresetRef.current, weightsRef.current));
       map.setLayoutProperty(
         CANDIDATE_FILL_LAYER_ID,
         "visibility",
         priorityVisibleRef.current ? "visible" : "none",
-      );
-      map.setLayoutProperty(
-        CANDIDATE_BOUNDARY_LAYER_ID,
-        "visibility",
-        boundariesVisibleRef.current ? "visible" : "none",
       );
       const selectedFilter = getCandidateSelectedFilter(selectedHexIdRef.current);
       map.setFilter(CANDIDATE_SELECTED_FILL_LAYER_ID, selectedFilter);
@@ -174,6 +164,9 @@ export function CandidateMap({
       map.setFilter(CANDIDATE_SELECTED_OUTLINE_LAYER_ID, selectedFilter);
       if (focusRequestRef.current) {
         focusCandidate(map, focusRequestRef.current);
+        if (focusRequestRef.current.selectOnFocus) {
+          map.once("idle", () => selectFocusedCandidate(map, focusRequestRef.current, onSelect));
+        }
       }
     };
 
@@ -234,7 +227,11 @@ export function CandidateMap({
     const map = mapRef.current;
     if (!map || !focusRequest || !map.isStyleLoaded()) return;
     focusCandidate(map, focusRequest);
-  }, [focusRequest]);
+    if (focusRequest.selectOnFocus) {
+      const selectFrame = window.requestAnimationFrame(() => selectFocusedCandidate(map, focusRequest, onSelect));
+      return () => window.cancelAnimationFrame(selectFrame);
+    }
+  }, [focusRequest, onSelect]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -242,9 +239,9 @@ export function CandidateMap({
     map.setPaintProperty(
       CANDIDATE_FILL_LAYER_ID,
       "fill-color",
-      getCandidateFillPaint(PRESET_SCORE_FIELDS[activePreset])!["fill-color"]!,
+      getMapFillPaint(activePreset, weights),
     );
-  }, [activePreset]);
+  }, [activePreset, weights]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -252,10 +249,7 @@ export function CandidateMap({
     if (map.getLayer(CANDIDATE_FILL_LAYER_ID)) {
       map.setLayoutProperty(CANDIDATE_FILL_LAYER_ID, "visibility", priorityVisible ? "visible" : "none");
     }
-    if (map.getLayer(CANDIDATE_BOUNDARY_LAYER_ID)) {
-      map.setLayoutProperty(CANDIDATE_BOUNDARY_LAYER_ID, "visibility", boundariesVisible ? "visible" : "none");
-    }
-  }, [priorityVisible, boundariesVisible]);
+  }, [priorityVisible]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -283,6 +277,27 @@ export function CandidateMap({
       {mapError ? <div className="map-error" role="alert">Map error: {mapError}</div> : null}
     </div>
   );
+}
+
+function getMapFillPaint(activePreset: ActivePresetId, weights: WeightVector) {
+  const score = activePreset === "custom" ? weights : PRESET_SCORE_FIELDS[activePreset];
+  return getCandidateFillPaint(score)!["fill-color"]!;
+}
+
+type FocusRequest = Pick<ShortlistItem, "hex_id" | "longitude" | "latitude"> & { selectOnFocus?: boolean };
+
+function selectFocusedCandidate(
+  map: MapLibreMap,
+  focus: FocusRequest | undefined,
+  onSelect: (candidate: CandidateProperties) => void,
+) {
+  if (!focus) return;
+  const feature = map
+    .querySourceFeatures(CANDIDATE_SOURCE_ID)
+    .find((item) => String(item.properties?.hex_id ?? item.id ?? "") === focus.hex_id);
+  if (!feature) return;
+  const candidate = parseCandidateProperties(feature as MapGeoJSONFeature);
+  if (candidate) onSelect(candidate);
 }
 
 function focusCandidate(

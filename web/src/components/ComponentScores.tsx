@@ -1,40 +1,13 @@
-import type { CandidateProperties, PresetDefinition } from "../data/types";
+import type { CandidateProperties, WeightVector } from "../data/types";
 import { formatScore } from "../lib/formatting";
-
-const COMPONENTS = [
-  {
-    field: "habitat_context_score",
-    label: "Habitat Context",
-    description: "Surrounding structural habitat amount.",
-  },
-  {
-    field: "ecological_network_score",
-    label: "Ecological Network Context",
-    description: "Opposing-side habitat configuration.",
-  },
-  {
-    field: "riparian_opportunity_score",
-    label: "Riparian Opportunity",
-    description: "Focal mapped wetland and inland-water context.",
-  },
-  {
-    field: "protected_area_reinforcement_score",
-    label: "Protected-Area Reinforcement",
-    description: "Proximity to terrestrial formal protection.",
-  },
-  {
-    field: "restoration_land_availability_score",
-    label: "Restoration Land Availability",
-    description: "Amount of mapped eligible arable land.",
-  },
-] as const;
+import { COMPONENTS } from "../lib/weighting";
 
 interface ComponentScoresProps {
   candidate: CandidateProperties;
-  preset: PresetDefinition;
+  weights: WeightVector;
 }
 
-export function ComponentScores({ candidate, preset }: ComponentScoresProps) {
+export function ComponentScores({ candidate, weights }: ComponentScoresProps) {
   return (
     <div className="component-list">
       {COMPONENTS.map((component) => {
@@ -48,7 +21,7 @@ export function ComponentScores({ candidate, preset }: ComponentScoresProps) {
               </div>
               <div className="component-value">
                 <strong>{formatScore(score)}</strong>
-                <span>{Math.round(preset.weights[component.field] * 100)}%</span>
+                <span>{Math.round(weights[component.field] * 100)}%</span>
               </div>
             </div>
             <div className="component-bar" aria-label={`${component.label}: ${formatScore(score)} out of 100`}>
@@ -57,7 +30,7 @@ export function ComponentScores({ candidate, preset }: ComponentScoresProps) {
           </div>
         );
       })}
-      <p className="component-note">Relative model scores use a common 0–100 scale. Percentages show active preset weights.</p>
+      <p className="component-note">Relative model scores use a common 0–100 scale. Percentages show active weights.</p>
     </div>
   );
 }

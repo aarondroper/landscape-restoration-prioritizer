@@ -1,5 +1,7 @@
 export const PRESET_IDS = ["balanced", "connectivity_first", "riparian_restoration"] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
+export const CUSTOM_PRESET_ID = "custom" as const;
+export type ActivePresetId = PresetId | typeof CUSTOM_PRESET_ID;
 
 export type PresetScoreField =
   | "balanced_score"
@@ -23,11 +25,13 @@ export const COMPONENT_SCORE_FIELDS = {
 export type ComponentScoreField =
   (typeof COMPONENT_SCORE_FIELDS)[keyof typeof COMPONENT_SCORE_FIELDS];
 
+export type WeightVector = Record<ComponentScoreField, number>;
+
 export interface PresetDefinition {
   id: PresetId;
   name: string;
   description: string;
-  weights: Record<ComponentScoreField, number>;
+  weights: WeightVector;
 }
 
 export interface DeliveryMetadata {
@@ -72,6 +76,17 @@ export interface ShortlistItem extends CandidateProperties {
   rank: number;
   longitude: number;
   latitude: number;
+}
+
+export interface WeightIndexItem {
+  hex_id: string;
+  longitude: number;
+  latitude: number;
+  habitat_context_score: number;
+  ecological_network_score: number;
+  riparian_opportunity_score: number;
+  protected_area_reinforcement_score: number;
+  restoration_land_availability_score: number;
 }
 
 export interface CandidateShortlists {

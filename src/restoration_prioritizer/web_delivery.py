@@ -39,6 +39,7 @@ DELIVERY_DIRECTORY = Path("data/processed/delivery")
 GEOJSON_OUTPUT_PATH = DELIVERY_DIRECTORY / "candidates.geojson"
 METADATA_OUTPUT_PATH = DELIVERY_DIRECTORY / "candidates.metadata.json"
 SHORTLIST_OUTPUT_PATH = DELIVERY_DIRECTORY / "candidate_shortlists.json"
+CANDIDATE_WEIGHT_INDEX_OUTPUT_PATH = DELIVERY_DIRECTORY / "candidate_weight_index.json"
 CANDIDATE_PROVENANCE_PATH = Path("data/processed/candidate_units.provenance.json")
 
 DELIVERY_SCORE_FIELDS = tuple(PRESET_SCORE_FIELDS.values()) + tuple(SCORE_FIELDS)
@@ -69,6 +70,7 @@ FRACTION_DECIMALS = 5
 HECTARE_DECIMALS = 2
 GEOMETRY_DECIMALS = 6
 TOP_N = 50
+WEIGHT_INDEX_FIELDS = ("hex_id", "longitude", "latitude", *SCORE_FIELDS)
 WGS84 = CRS.from_epsg(4326)
 SKANE_BOUNDS = {
     "min_longitude": 11.0,
@@ -470,6 +472,82 @@ def build_candidate_shortlists(
     return shortlists, audit
 
 
+def build_candidate_weight_index(
+    frame_projected: gpd.GeoDataFrame,
+    expected_count: int | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build the narrow client-side index for arbitrary component weighting.
+
+    The index deliberately contains only candidate identity, a WGS84 centroid,
+    and the five finalized component scores.  Scores are rounded using the
+    same delivery contract as the map payload; no score is recomputed here.
+    """
+
+    if not isinstance(frame_projected, gpd.GeoDataFrame):
+        raise WebDeliveryError("Weight index source must be a GeoDataFrame")
+    if frame_projected.crs is None or frame_projected.crs.to_epsg() != 3006:
+        raise WebDeliveryError(
+            f"Weight index centroid source CRS is {frame_projected.crs}; expected EPSG:3006"
+        )
+    if expected_count is not None and len(frame_projected) != expected_count:
+        raise WebDeliveryError(
+            f"Weight index source has {len(frame_projected):,} rows; expected {expected_count:,}"
+        )
+    _require_columns(
+        frame_projected, ("geometry", *DELIVERY_PROPERTY_FIELDS), "Weight index source"
+    )
+
+    # Preserve the established delivery convention: centroid in projected
+    # metres first, then point transformation to WGS84.
+    projected_centroids = frame_projected.geometry.centroid
+    centroid_points = gpd.GeoSeries(
+        projected_centroids, index=frame_projected.index, crs="EPSG:3006"
+    ).to_crs(WGS84)
+    delivered_properties = round_delivery_properties(
+        frame_projected[list(DELIVERY_PROPERTY_FIELDS)].copy()
+    )
+    ordered = frame_projected.sort_values("hex_id", kind="mergesort")
+    entries: list[dict[str, Any]] = []
+    for index, row in ordered.iterrows():
+        point = centroid_points.loc[index]
+        longitude = float(point.x)
+        latitude = float(point.y)
+        if not (
+            math.isfinite(longitude)
+            and math.isfinite(latitude)
+            and SKANE_BOUNDS["min_longitude"] <= longitude <= SKANE_BOUNDS["max_longitude"]
+            and SKANE_BOUNDS["min_latitude"] <= latitude <= SKANE_BOUNDS["max_latitude"]
+        ):
+            raise WebDeliveryError(
+                f"Weight index centroid for {row['hex_id']} is outside plausible Skåne bounds: "
+                f"({longitude}, {latitude})"
+            )
+        delivered = delivered_properties.loc[index]
+        entries.append(
+            {
+                "hex_id": str(row["hex_id"]),
+                "longitude": _round_number(longitude, GEOMETRY_DECIMALS),
+                "latitude": _round_number(latitude, GEOMETRY_DECIMALS),
+                **{
+                    field: delivered[field].item()
+                    if hasattr(delivered[field], "item")
+                    else delivered[field]
+                    for field in SCORE_FIELDS
+                },
+            }
+        )
+    return entries, {
+        "entry_count": len(entries),
+        "property_names": list(WEIGHT_INDEX_FIELDS),
+        "source_crs": "EPSG:3006",
+        "output_crs": "EPSG:4326",
+        "centroid_method": "candidate geometry centroid calculated in EPSG:3006, then transformed to WGS84",
+        "score_precision": f"{SCORE_DECIMALS} decimal places",
+        "coordinate_precision": f"{GEOMETRY_DECIMALS} decimal places",
+        "tie_break": "hex_id ascending",
+    }
+
+
 def serialize_geojson(features: list[dict[str, Any]]) -> bytes:
     """Serialize a deterministic compact RFC-compatible FeatureCollection."""
 
@@ -678,6 +756,7 @@ def build_web_delivery(
     presets_path: Path = PRESETS_PATH,
     expected_count: int | None = EXPECTED_CANDIDATE_COUNT,
     shortlist_output_path: Path = SHORTLIST_OUTPUT_PATH,
+    weight_index_output_path: Path = CANDIDATE_WEIGHT_INDEX_OUTPUT_PATH,
 ) -> dict[str, Any]:
     """Build the compact GeoJSON and metadata, then return the audit."""
 
@@ -739,6 +818,9 @@ def build_web_delivery(
         wgs84[field] = delivered_properties[field].to_numpy()
     features = _feature_records(wgs84)
     shortlists, shortlist_audit = build_candidate_shortlists(joined, top_n=TOP_N)
+    weight_index, weight_index_audit = build_candidate_weight_index(
+        joined, expected_count=expected_count
+    )
     shortlist_payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "top_n": TOP_N,
@@ -765,6 +847,11 @@ def build_web_delivery(
     shortlist_output_path.parent.mkdir(parents=True, exist_ok=True)
     shortlist_output_path.write_text(
         json.dumps(shortlist_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    weight_index_output_path.parent.mkdir(parents=True, exist_ok=True)
+    weight_index_output_path.write_text(
+        json.dumps(weight_index, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n",
         encoding="utf-8",
     )
     payload = serialize_geojson(features)
@@ -830,6 +917,12 @@ def build_web_delivery(
             "top_n": TOP_N,
             "ranking_source": str(score_path),
             "audit": shortlist_audit,
+        },
+        "candidate_weight_index": {
+            "path": str(weight_index_output_path),
+            "audit": weight_index_audit,
+            "raw_bytes": weight_index_output_path.stat().st_size,
+            "gzip_bytes": _gzip_size(weight_index_output_path.read_bytes()),
         },
         "payload_audit": payload_audit,
         "parse_audit": {
